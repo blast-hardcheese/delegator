@@ -5,5 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "delegator_core"
+path = "src/core/core.rs"
+
 [dependencies]
 actix-web = "4.2.1"
