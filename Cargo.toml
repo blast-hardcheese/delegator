@@ -11,6 +11,7 @@ path = "src/core/core.rs"
 
 [dependencies]
 actix-web = "4.2.1"
+awc = "3.0.1"
 hocon = "0.9.0"
 serde = { version = "1.0.147", features = ["derive"] }
 serde_json = "1.0"
