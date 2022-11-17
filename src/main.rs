@@ -1,6 +1,7 @@
 use std::io::{Error, ErrorKind, Result};
 
 use actix_web::{App, HttpServer};
+use delegator_core::config::Configuration;
 
 enum InitErrors {
     MissingConfigFile,
@@ -24,10 +25,10 @@ async fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
-    let config =
+    let Configuration { http } =
         delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
     HttpServer::new(|| App::new().configure(delegator_core::routes::configure))
-        .bind((config.http.host, config.http.port))?
+        .bind((http.host, http.port))?
         .run()
         .await
 }
