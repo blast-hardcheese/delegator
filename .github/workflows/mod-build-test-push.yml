@@ -1,0 +1,136 @@
+name: Build, Test, Push
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'The environment in which to deploy.'
+        required: true
+        type: string
+      aws_region:
+        description: 'The AWS Region in which to deploy.'
+        required: true
+        type: string
+      ecr_host:
+        description: 'The ECR hostname to which to deploy'
+        default: 736898943770.dkr.ecr.us-east-1.amazonaws.com
+        type: string
+      app_image_name:
+        description: 'The image name (default: delegator)'
+        default: delegator
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      CI_ACCESS_TOKEN:
+        required: true
+      SENTRY_BEARER_TOKEN:
+        required: true
+
+env:
+  MASTER_BRANCH        : master
+  AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  GITHUB_TOKEN         : ${{ secrets.CI_ACCESS_TOKEN }}
+  AWS_REGION           : ${{ inputs.aws_region }}
+  ECR_HOST             : ${{ inputs.ecr_host }}
+  APP_IMG_NAME         : ${{ inputs.app_image_name }}
+  SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.image_tag.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        # with:
+        #   fetch-depth: 0
+        #   submodules: true
+
+      - name: Install rust stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+
+
+      - name: Determine image tag
+        id: image_tag
+        run: |
+          echo "GITHUB_REF:      ${GITHUB_REF}"
+          echo "GITHUB_REF_NAME: ${GITHUB_REF_NAME}"
+          echo "git describe:    $(git describe --tags @)"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          elif [ "${GITHUB_REF_NAME}" = "${MASTER_BRANCH}" ]; then
+            tag="$(git describe --tags @)"
+          else
+            tag="$(git describe --tags @)-thunderdome"
+          fi
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
+
+      - name: Verify image tag
+        env:
+          IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
+        run: |
+          echo "Using Image Tag: ${IMAGE_TAG}"
+
+      - name: Set up rust build cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Run cargo build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      - name: Run cargo test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release
+
+      - name: Build docker image
+        env:
+          IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
+          APP_ECR_IMAGE: ${{ env.ECR_HOST }}/${{ env.APP_IMG_NAME }}
+        run: |
+          make docker_build
+
+      # - name: Login to ECR
+      #   id: ecr_login
+      #   run: |
+      #     aws ecr get-login-password --region us-east-1 \
+      #       | docker login --username AWS --password-stdin ${ECR_HOST}
+
+      # - name: Docker Push App
+      #   env:
+      #     IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
+      #     APP_ECR_IMAGE: ${{ env.ECR_HOST }}/${{ env.APP_IMG_NAME }}
+      #   run: |
+      #     docker push ${APP_ECR_IMAGE}:${IMAGE_TAG}
+
+      # - name: Copy dist out of app container
+      #   env:
+      #     IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
+      #     APP_ECR_IMAGE: ${{ env.ECR_HOST }}/${{ env.APP_IMG_NAME }}
+      #   run: |
+      #     docker create --name api ${APP_ECR_IMAGE}:${IMAGE_TAG}
+      #     docker cp api:/app/dist ./dist
+
+      # - name: Sentry Release
+      #   uses: getsentry/action-release@v1.2.0
+      #   env:
+      #     SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_BEARER_TOKEN }}
+      #     SENTRY_ORG: appreciate-stuff
+      #     SENTRY_PROJECT: delegator
+      #   with:
+      #     sourcemaps: './dist'
+      #     ignore_missing: true
+      #     version: ${{ steps.image_tag.outputs.tag }}

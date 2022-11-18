@@ -1,0 +1,14 @@
+name: release-drafter
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  draft-release:
+    name: 'Draft release'
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: release-drafter/release-drafter@df69d584deac33d8569990cb6413f82447181076
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

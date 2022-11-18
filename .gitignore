@@ -1,1 +1,30 @@
 /target
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+.env.*
+.env
+
+# Generated docs code
+public/
+tsconfig.tsbuildinfo
+
+generated_*
+.terraform
+.terraform.lock.hcl
+.terragrunt-cache
+graph.svg
