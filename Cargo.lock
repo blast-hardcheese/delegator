@@ -424,6 +424,7 @@ version = "0.1.0"
 dependencies = [
  "actix-web",
  "awc",
+ "derive_more",
  "hocon",
  "http-serde",
  "serde",
