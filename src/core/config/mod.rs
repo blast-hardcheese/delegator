@@ -9,7 +9,14 @@ use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct HttpClientConfig {
+    #[serde(alias = "user-agent")]
+    pub user_agent: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct HttpConfig {
+    pub client: HttpClientConfig,
     pub host: String,
     pub port: u16,
 }

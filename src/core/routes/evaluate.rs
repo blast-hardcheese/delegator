@@ -9,7 +9,7 @@ use derive_more::Display;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::config::{ServiceDefinition, Services};
+use crate::config::{HttpClientConfig, ServiceDefinition, Services};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
@@ -37,6 +37,7 @@ impl error::ResponseError for EvaluateError {}
 
 async fn evaluate(
     cryptogram: Json<JsonCryptogram>,
+    client_config: Data<HttpClientConfig>,
     services: Data<Services>,
 ) -> Result<HttpResponse, EvaluateError> {
     let client = awc::Client::default();
@@ -66,7 +67,7 @@ async fn evaluate(
                     .map_err(|err| EvaluateError::UriBuilderError(err))?;
                 let req = client
                     .post(uri)
-                    .insert_header(("User-Agent", "awc/3.0"))
+                    .insert_header(("User-Agent", client_config.user_agent.clone()))
                     .insert_header(("Content-Type", "application/json"))
                     .send_json(&step.payload.clone());
                 let mut res = req.await.map_err(|err| EvaluateError::ClientError(err))?;
