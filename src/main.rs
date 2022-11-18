@@ -1,6 +1,6 @@
 use std::io::{Error, ErrorKind, Result};
 
-use actix_web::{web::Data, App, HttpServer};
+use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use delegator_core::config::{Configuration, Services};
 
 enum InitErrors {
@@ -31,6 +31,7 @@ async fn main() -> Result<()> {
         delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
     HttpServer::new(move || {
         App::new()
+            .wrap(Logger::default().log_target("accesslog"))
             .app_data::<Data<Services>>(Data::new(services.clone()))
             .configure(delegator_core::routes::configure)
     })
