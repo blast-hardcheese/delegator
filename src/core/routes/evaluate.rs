@@ -4,6 +4,7 @@ use actix_web::{
     web::{self, Data, Json},
     HttpResponse,
 };
+use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
 use serde::Deserialize;
 use serde_json::Value;
@@ -24,12 +25,12 @@ pub struct JsonCryptogram {
 
 #[derive(Debug, Display)]
 enum EvaluateError {
-    ClientError,
-    InvalidJsonError,
+    ClientError(SendRequestError),
+    InvalidJsonError(JsonPayloadError),
     NoStepsSpecified,
     UnknownMethod(String),
     UnknownService(String),
-    UriBuilderError,
+    UriBuilderError(error::HttpError),
 }
 
 impl error::ResponseError for EvaluateError {}
@@ -62,17 +63,17 @@ async fn evaluate(
                     .authority(endpoint)
                     .path_and_query(method.path.to_owned())
                     .build()
-                    .map_err(|_err| EvaluateError::UriBuilderError)?;
+                    .map_err(|err| EvaluateError::UriBuilderError(err))?;
                 let req = client
                     .post(uri)
                     .insert_header(("User-Agent", "awc/3.0"))
                     .insert_header(("Content-Type", "application/json"))
                     .send_json(&step.payload.clone());
-                let mut res = req.await.map_err(|_e| EvaluateError::ClientError)?;
+                let mut res = req.await.map_err(|err| EvaluateError::ClientError(err))?;
                 let x = res
                     .json::<Value>()
                     .await
-                    .map_err(|_err| EvaluateError::InvalidJsonError)?;
+                    .map_err(|err| EvaluateError::InvalidJsonError(err))?;
                 Some(x)
             }
         };
