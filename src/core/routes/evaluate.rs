@@ -47,7 +47,7 @@ async fn evaluate(
     for step in &cryptogram.steps {
         let service = services
             .get(&step.service)
-            .ok_or(EvaluateError::UnknownService(step.service.to_owned()))?
+            .ok_or_else(|| EvaluateError::UnknownService(step.service.to_owned()))?
             .to_owned();
         final_result = match service {
             ServiceDefinition::Rest {
@@ -57,24 +57,24 @@ async fn evaluate(
             } => {
                 let method = methods
                     .get(&step.method)
-                    .ok_or(EvaluateError::UnknownMethod(step.method.clone()))?;
+                    .ok_or_else(|| EvaluateError::UnknownMethod(step.method.clone()))?;
 
                 let uri = Uri::builder()
                     .scheme(scheme)
                     .authority(endpoint)
                     .path_and_query(method.path.to_owned())
                     .build()
-                    .map_err(|err| EvaluateError::UriBuilderError(err))?;
+                    .map_err(EvaluateError::UriBuilderError)?;
                 let req = client
                     .post(uri)
                     .insert_header(("User-Agent", client_config.user_agent.clone()))
                     .insert_header(("Content-Type", "application/json"))
                     .send_json(&step.payload.clone());
-                let mut res = req.await.map_err(|err| EvaluateError::ClientError(err))?;
+                let mut res = req.await.map_err(EvaluateError::ClientError)?;
                 let x = res
                     .json::<Value>()
                     .await
-                    .map_err(|err| EvaluateError::InvalidJsonError(err))?;
+                    .map_err(EvaluateError::InvalidJsonError)?;
                 Some(x)
             }
         };
