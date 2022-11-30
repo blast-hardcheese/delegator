@@ -66,13 +66,8 @@ jobs:
         run: |
           echo "GITHUB_REF:      ${GITHUB_REF}"
           echo "GITHUB_REF_NAME: ${GITHUB_REF_NAME}"
-          echo "git describe:    $(git describe --tags @)"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            tag="${GITHUB_REF_NAME}"
-          else
-            tag="$(git describe --tags @ 2>/dev/null || echo "$GITHUB_REF_NAME")"
-          fi
-          echo "tag=${tag}" >> $GITHUB_OUTPUT
+          tag="$(git describe --tags @ 2>/dev/null || echo "${GITHUB_REF_NAME}")"
+          echo "tag=${tag}" >> ${GITHUB_OUTPUT}
 
       - name: Verify image tag
         env:
