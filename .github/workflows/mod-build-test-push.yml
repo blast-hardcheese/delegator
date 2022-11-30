@@ -48,9 +48,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        # with:
-        #   fetch-depth: 0
-        #   submodules: true
+        with:
+          # We have to use fetch-depth 0 so that checkout will grab the full
+          # history, which is needed to lookup tags in the "Determine image tag"
+          # step.  By default the checkout action only pulls the latest commit.
+          fetch-depth: 0
 
       - name: Install rust stable
         uses: actions-rs/toolchain@v1
@@ -58,7 +60,6 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
-
 
       - name: Determine image tag
         id: image_tag
@@ -68,10 +69,8 @@ jobs:
           echo "git describe:    $(git describe --tags @)"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             tag="${GITHUB_REF_NAME}"
-          elif [ "${GITHUB_REF_NAME}" = "${MASTER_BRANCH}" ]; then
-            tag="$(git describe --tags @)"
           else
-            tag="$(git describe --tags @)-thunderdome"
+            tag="$(git describe --tags @ 2>/dev/null || echo "$GITHUB_REF_NAME")"
           fi
           echo "tag=${tag}" >> $GITHUB_OUTPUT
 
