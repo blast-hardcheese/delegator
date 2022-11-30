@@ -1,0 +1,7 @@
+/.github
+/.git
+/target/release/build
+/target/release/deps
+/target/debug/build
+/target/debug/deps
+/terraform
