@@ -27,10 +27,29 @@ async fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
-    let Configuration { http, services } =
-        delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
+    let Configuration {
+        http,
+        sentry,
+        services,
+    } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
+
+    let _guard = sentry::init((
+        sentry.dsn,
+        sentry::ClientOptions {
+            environment: sentry.environment.map(|e| e.into()),
+            release: sentry.release.map(|r| r.into()),
+            traces_sample_rate: 1f32,
+            ..Default::default()
+        },
+    ));
+
+    // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
+    // I suspect it's so we get error traces in Sentry. We may need to revisit this.
+    std::env::set_var("RUST_BACKTRACE", "1");
+
     HttpServer::new(move || {
         App::new()
+            .wrap(sentry_actix::Sentry::new())
             .wrap(Logger::default().log_target("accesslog"))
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))

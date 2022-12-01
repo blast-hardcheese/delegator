@@ -22,6 +22,13 @@ pub struct HttpConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct SentryConfig {
+    pub dsn: Option<String>,
+    pub environment: Option<String>,
+    pub release: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct MethodDefinition {
     #[serde(with = "path_and_query")]
     pub path: PathAndQuery,
@@ -52,6 +59,7 @@ pub type Services = HashMap<String, ServiceDefinition>;
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
     pub http: HttpConfig,
+    pub sentry: SentryConfig,
     pub services: Services,
 }
 
