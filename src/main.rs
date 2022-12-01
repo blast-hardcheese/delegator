@@ -27,8 +27,11 @@ async fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
-    let Configuration { http, services } =
-        delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
+    let Configuration {
+        http,
+        sentry,
+        services,
+    } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default().log_target("accesslog"))
