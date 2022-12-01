@@ -43,6 +43,10 @@ async fn main() -> Result<()> {
         },
     ));
 
+    // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
+    // I suspect it's so we get error traces in Sentry. We may need to revisit this.
+    std::env::set_var("RUST_BACKTRACE", "1");
+
     HttpServer::new(move || {
         App::new()
             .wrap(sentry_actix::Sentry::new())
