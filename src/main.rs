@@ -32,8 +32,19 @@ async fn main() -> Result<()> {
         sentry,
         services,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
+
+    let _guard = sentry::init((
+        sentry.dsn,
+        sentry::ClientOptions {
+            environment: sentry.environment.map(|e| e.into()),
+            release: sentry.release.map(|r| r.into()),
+            ..Default::default()
+        },
+    ));
+
     HttpServer::new(move || {
         App::new()
+            .wrap(sentry_actix::Sentry::new())
             .wrap(Logger::default().log_target("accesslog"))
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
