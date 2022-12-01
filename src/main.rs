@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
         sentry::ClientOptions {
             environment: sentry.environment.map(|e| e.into()),
             release: sentry.release.map(|r| r.into()),
+            traces_sample_rate: 1f32,
             ..Default::default()
         },
     ));
