@@ -1,0 +1,32 @@
+name: Manual Build, Test, Push
+
+on: 
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'The environment in which to deploy.' 
+        type: choice
+        default: thunderdome
+        required: true
+        options:
+          - thunderdome
+          - staging
+      aws_region:
+        description: 'The AWS Region in which to deploy.'
+        required: true
+        type: choice
+        default: us-east-1
+        options:
+          - us-east-1
+
+jobs:
+  call-build-test-push:
+    uses: ./.github/workflows/mod-build-test-push.yml
+    with:
+      environment   : ${{ inputs.environment }}
+      aws_region    : ${{ inputs.aws_region }}
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
+      SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
