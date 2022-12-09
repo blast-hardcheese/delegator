@@ -3,13 +3,9 @@ name: Build, Test, Push
 on:
   workflow_call:
     inputs:
-      environment:
-        description: 'The environment in which to deploy.'
-        required: true
-        type: string
       aws_region:
         description: 'The AWS Region in which to deploy.'
-        required: true
+        default: us-east-1
         type: string
       ecr_host:
         description: 'The ECR hostname to which to deploy'
@@ -36,7 +32,8 @@ env:
   GITHUB_TOKEN         : ${{ secrets.CI_ACCESS_TOKEN }}
   AWS_REGION           : ${{ inputs.aws_region }}
   ECR_HOST             : ${{ inputs.ecr_host }}
-  APP_IMG_NAME         : ${{ inputs.app_image_name }}
+  APP_IMAGE_NAME       : ${{ inputs.app_image_name }}
+  APP_ECR_IMAGE        : ${{ inputs.ecr_host }}/${{ inputs.app_image_name }}
   SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
 
 jobs:
@@ -93,30 +90,34 @@ jobs:
       - name: Build docker image
         env:
           IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
-          APP_ECR_IMAGE: ${{ env.ECR_HOST }}/${{ env.APP_IMG_NAME }}
         run: |
           make docker_build
 
-      # - name: Login to ECR
-      #   id: ecr_login
-      #   run: |
-      #     aws ecr get-login-password --region us-east-1 \
-      #       | docker login --username AWS --password-stdin ${ECR_HOST}
+      - name: Login to ECR
+        id: ecr_login
+        run: |
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin ${ECR_HOST}
 
-      # - name: Docker Push App
-      #   env:
-      #     IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
-      #     APP_ECR_IMAGE: ${{ env.ECR_HOST }}/${{ env.APP_IMG_NAME }}
-      #   run: |
-      #     docker push ${APP_ECR_IMAGE}:${IMAGE_TAG}
+      - name: Docker Push App
+        env:
+          IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
+        run: |
+          docker tag ${APP_IMAGE_NAME}:latest ${APP_ECR_IMAGE}:${IMAGE_TAG}
+          docker push ${APP_ECR_IMAGE}:${IMAGE_TAG}
+
+      # TODO: In a future update, we need to figure out how to integrate sentry
+      # with rust and provide it our debugging symbols.  It looks like a fairly
+      # involved job and is out of scope for now.  The general structure should
+      # loosely follow what is below so this is being left in but commented out,
+      # for now.
 
       # - name: Copy dist out of app container
       #   env:
       #     IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
-      #     APP_ECR_IMAGE: ${{ env.ECR_HOST }}/${{ env.APP_IMG_NAME }}
       #   run: |
-      #     docker create --name api ${APP_ECR_IMAGE}:${IMAGE_TAG}
-      #     docker cp api:/app/dist ./dist
+      #     docker create --name app ${APP_IMAGE_NAME}:latest
+      #     docker cp app:/app/dist ./dist
 
       # - name: Sentry Release
       #   uses: getsentry/action-release@v1.2.0
