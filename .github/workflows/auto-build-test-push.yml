@@ -9,7 +9,6 @@ jobs:
   call-build-test-push:
     uses: ./.github/workflows/mod-build-test-push.yml
     with:
-      environment: staging
       aws_region : us-east-1
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
