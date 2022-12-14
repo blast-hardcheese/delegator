@@ -1,4 +1,4 @@
-name: Auto Build, Test, Push
+name: Auto Build, Test, Push, Deploy
 
 on:
   push:
@@ -6,10 +6,12 @@ on:
       - master
 
 jobs:
-  call-build-test-push:
-    uses: ./.github/workflows/mod-build-test-push.yml
+  call-build-test-push-deploy:
+    uses: ./.github/workflows/mod-build-test-push-deploy.yml
     with:
+      environment: stag
       aws_region : us-east-1
+      do_dry_run : false
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
