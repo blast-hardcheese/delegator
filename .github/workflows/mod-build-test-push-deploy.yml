@@ -1,8 +1,12 @@
-name: Build, Test, Push
+name: Build, Test, Push, Deploy
 
 on:
   workflow_call:
     inputs:
+      environment:
+        description: 'The environment in which to deploy the App.'
+        required: true
+        type: string
       aws_region:
         description: 'The AWS Region in which to deploy.'
         default: us-east-1
@@ -35,6 +39,7 @@ env:
   APP_IMAGE_NAME       : ${{ inputs.app_image_name }}
   APP_ECR_IMAGE        : ${{ inputs.ecr_host }}/${{ inputs.app_image_name }}
   SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
+  ENV                  : ${{ inputs.environment }}
 
 jobs:
   build-test-push:
@@ -129,3 +134,17 @@ jobs:
       #     sourcemaps: './dist'
       #     ignore_missing: true
       #     version: ${{ steps.image_tag.outputs.tag }}
+
+  call-deploy-to-env:
+    uses: ./.github/workflows/mod-deploy-to-env.yml
+    needs:
+      - build-test-push
+    with:
+      environment  : ${{ inputs.environment }}
+      aws_region   : ${{ inputs.aws_region }}
+      app_image_tag: ${{ needs.build-test-push.outputs.tag }}
+      do_dry_run   : false
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
