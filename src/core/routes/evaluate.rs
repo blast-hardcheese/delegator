@@ -1,6 +1,8 @@
+use async_trait::async_trait;
+
 use actix_web::{
     error,
-    http::Uri,
+    http::{Method, Uri},
     web::{self, Data, Json},
     HttpResponse,
 };
@@ -40,22 +42,57 @@ async fn evaluate(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
 ) -> Result<HttpResponse, EvaluateError> {
-    let result = do_evaluate(
-        cryptogram.into_inner(),
-        client_config.get_ref(),
-        services.get_ref(),
-    )
-    .await?;
+    let client = awc::Client::default();
+    let live_client = LiveJsonClient {
+        client,
+        client_config: client_config.get_ref().clone(),
+    };
+
+    let result = do_evaluate(cryptogram.into_inner(), live_client, services.get_ref()).await?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
-async fn do_evaluate(
+#[async_trait(?Send)]
+trait JsonClient {
+    async fn issue_request(
+        &self,
+        method: Method,
+        uri: Uri,
+        value: Value,
+    ) -> Result<Value, EvaluateError>;
+}
+
+struct LiveJsonClient {
+    client: awc::Client,
+    client_config: HttpClientConfig,
+}
+
+#[async_trait(?Send)]
+impl JsonClient for LiveJsonClient {
+    async fn issue_request(
+        &self,
+        method: Method,
+        uri: Uri,
+        payload: Value,
+    ) -> Result<Value, EvaluateError> {
+        self.client
+            .request(method, uri)
+            .insert_header(("User-Agent", self.client_config.user_agent.clone()))
+            .insert_header(("Content-Type", "application/json"))
+            .send_json(&payload)
+            .await
+            .map_err(EvaluateError::ClientError)?
+            .json::<Value>()
+            .await
+            .map_err(EvaluateError::InvalidJsonError)
+    }
+}
+
+async fn do_evaluate<JC: JsonClient>(
     cryptogram: JsonCryptogram,
-    client_config: &HttpClientConfig,
+    json_client: JC,
     services: &Services,
 ) -> Result<Value, EvaluateError> {
-    let client = awc::Client::default();
-
     let mut final_result: Option<Value> = None;
 
     for step in &cryptogram.steps {
@@ -79,17 +116,11 @@ async fn do_evaluate(
                     .path_and_query(method.path.to_owned())
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
-                let req = client
-                    .post(uri)
-                    .insert_header(("User-Agent", client_config.user_agent.clone()))
-                    .insert_header(("Content-Type", "application/json"))
-                    .send_json(&step.payload.clone());
-                let mut res = req.await.map_err(EvaluateError::ClientError)?;
-                let x = res
-                    .json::<Value>()
-                    .await
-                    .map_err(EvaluateError::InvalidJsonError)?;
-                Some(x)
+
+                let result = json_client
+                    .issue_request(Method::POST, uri, step.payload.clone())
+                    .await?;
+                Some(result)
             }
         };
     }
