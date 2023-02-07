@@ -3,7 +3,7 @@ pub mod scheme;
 
 use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
