@@ -88,6 +88,20 @@ impl JsonClient for LiveJsonClient {
     }
 }
 
+struct TestJsonClient;
+
+#[async_trait(?Send)]
+impl JsonClient for TestJsonClient {
+    async fn issue_request(
+        &self,
+        _method: Method,
+        _uri: Uri,
+        payload: Value,
+    ) -> Result<Value, EvaluateError> {
+        Ok(payload)
+    }
+}
+
 async fn do_evaluate<JC: JsonClient>(
     cryptogram: JsonCryptogram,
     json_client: JC,
@@ -126,6 +140,55 @@ async fn do_evaluate<JC: JsonClient>(
     }
 
     final_result.ok_or(EvaluateError::NoStepsSpecified)
+}
+
+#[actix_web::test]
+async fn routes_evaluate() {
+    use crate::config::MethodDefinition;
+    use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
+    use hashbrown::hash_map::DefaultHashBuilder;
+    use hashbrown::HashMap;
+
+    let cryptogram = JsonCryptogram {
+        steps: vec![JsonCryptogramStep {
+            service: "foo".to_owned(),
+            method: "bar".to_owned(),
+            payload: Value::Null,
+        }],
+    };
+
+    let mut services = {
+        let s = DefaultHashBuilder::default();
+        HashMap::with_hasher(s)
+    };
+
+    services.insert(
+        "foo".to_owned(),
+        ServiceDefinition::Rest {
+            scheme: Scheme::HTTP,
+            endpoint: Authority::from_static("localhost:8080"),
+            methods: {
+                let mut methods = {
+                    let s = DefaultHashBuilder::default();
+                    HashMap::with_hasher(s)
+                };
+                methods.insert(
+                    "bar".to_owned(),
+                    MethodDefinition {
+                        path: PathAndQuery::from_static("/foo?bar=baz"),
+                    },
+                );
+                methods
+            },
+        },
+    );
+
+    match do_evaluate(cryptogram, TestJsonClient, &services).await {
+        Ok(value) => assert_eq!(value, Value::Null),
+        other => {
+            let _ = other.unwrap();
+        }
+    }
 }
 
 pub fn configure(server: &mut web::ServiceConfig) {
