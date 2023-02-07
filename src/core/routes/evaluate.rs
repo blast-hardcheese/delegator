@@ -150,11 +150,18 @@ async fn routes_evaluate() {
     use hashbrown::HashMap;
 
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: "foo".to_owned(),
-            method: "bar".to_owned(),
-            payload: Value::Null,
-        }],
+        steps: vec![
+            JsonCryptogramStep {
+                service: "service1".to_owned(),
+                method: "foo".to_owned(),
+                payload: Value::String("first".to_owned()),
+            },
+            JsonCryptogramStep {
+                service: "service2".to_owned(),
+                method: "bar".to_owned(),
+                payload: Value::String("second".to_owned()),
+            },
+        ],
     };
 
     let mut services = {
@@ -163,10 +170,31 @@ async fn routes_evaluate() {
     };
 
     services.insert(
-        "foo".to_owned(),
+        "service1".to_owned(),
         ServiceDefinition::Rest {
             scheme: Scheme::HTTP,
-            endpoint: Authority::from_static("localhost:8080"),
+            endpoint: Authority::from_static("0:0"),
+            methods: {
+                let mut methods = {
+                    let s = DefaultHashBuilder::default();
+                    HashMap::with_hasher(s)
+                };
+                methods.insert(
+                    "foo".to_owned(),
+                    MethodDefinition {
+                        path: PathAndQuery::from_static("/query1"),
+                    },
+                );
+                methods
+            },
+        },
+    );
+
+    services.insert(
+        "service2".to_owned(),
+        ServiceDefinition::Rest {
+            scheme: Scheme::HTTP,
+            endpoint: Authority::from_static("0:0"),
             methods: {
                 let mut methods = {
                     let s = DefaultHashBuilder::default();
@@ -175,7 +203,7 @@ async fn routes_evaluate() {
                 methods.insert(
                     "bar".to_owned(),
                     MethodDefinition {
-                        path: PathAndQuery::from_static("/foo?bar=baz"),
+                        path: PathAndQuery::from_static("/query2"),
                     },
                 );
                 methods
@@ -184,7 +212,7 @@ async fn routes_evaluate() {
     );
 
     match do_evaluate(cryptogram, TestJsonClient, &services).await {
-        Ok(value) => assert_eq!(value, Value::Null),
+        Ok(value) => assert_eq!(value, Value::String("second".to_owned())),
         other => {
             let _ = other.unwrap();
         }
