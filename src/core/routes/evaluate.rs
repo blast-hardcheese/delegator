@@ -40,6 +40,20 @@ async fn evaluate(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
 ) -> Result<HttpResponse, EvaluateError> {
+    let result = do_evaluate(
+        cryptogram.into_inner(),
+        client_config.get_ref(),
+        services.get_ref(),
+    )
+    .await?;
+    Ok(HttpResponse::Ok().json(&result))
+}
+
+async fn do_evaluate(
+    cryptogram: JsonCryptogram,
+    client_config: &HttpClientConfig,
+    services: &Services,
+) -> Result<Value, EvaluateError> {
     let client = awc::Client::default();
 
     let mut final_result: Option<Value> = None;
@@ -80,8 +94,7 @@ async fn evaluate(
         };
     }
 
-    let result = final_result.ok_or(EvaluateError::NoStepsSpecified)?;
-    Ok(HttpResponse::Ok().json(&result))
+    final_result.ok_or(EvaluateError::NoStepsSpecified)
 }
 
 pub fn configure(server: &mut web::ServiceConfig) {
