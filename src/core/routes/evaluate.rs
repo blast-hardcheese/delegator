@@ -12,7 +12,11 @@ use hashbrown::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services};
+use crate::{
+    config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
+    translate,
+    translate::Language,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
@@ -69,28 +73,17 @@ fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, Evalu
             (ServiceName::Catalog, MethodName::Search),
             (ServiceName::Catalog, MethodName::Lookup),
         ) => {
-            let mut query = next
-                .payload
-                .as_object()
-                .ok_or(EvaluateError::InvalidStructure)?
-                .clone();
+            let prog = Language::Focus(
+                String::from("results"),
+                Box::new(Language::Object(vec![(
+                    String::from("ids"),
+                    Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
+                )])),
+            );
 
-            // Results from search
-            let results = response
-                .as_object()
-                .and_then(|o| o.get("results"))
-                .and_then(|o| o.as_array())
-                .ok_or(EvaluateError::InvalidStructure)?;
-            let mut ids = vec![];
-            for result in results {
-                let id = result
-                    .as_object()
-                    .and_then(|o| o.get("product_variant_id"))
-                    .ok_or(EvaluateError::InvalidStructure)?;
-                ids.push(id.to_owned());
-            }
-            query.insert(String::from("ids"), Value::Array(ids.to_owned()));
-            let new_payload = Value::Object(query);
+            let new_payload =
+                translate::step(prog, &response).map_err(|_e| EvaluateError::InvalidStructure)?;
+
             state.insert(
                 next_idx,
                 JsonCryptogramStep {
