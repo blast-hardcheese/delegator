@@ -11,7 +11,7 @@ env:
   GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
 
 jobs:
-  lint-build-test:
+  lint-build:
     name: Lint, Build, and Test
     runs-on: ubuntu-latest
 
@@ -24,7 +24,7 @@ jobs:
         with:
           toolchain: stable
           override: true
-          components: rustfmt, clippy
+          components: rustfmt
 
       - name: Set up build cache
         uses: swatinem/rust-cache@v2
@@ -44,10 +44,24 @@ jobs:
         run: |
           make docker_build_debug
 
-      - name: Run cargo test
-        uses: actions-rs/cargo@v1
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install rust stable
+        uses: actions-rs/toolchain@v1
         with:
-          command: test
+          toolchain: stable
+          override: true
+          components: clippy
+
+      - name: Set up build cache
+        uses: swatinem/rust-cache@v2
 
       - name: Run clippy check
         uses: actions-rs/clippy-check@v1
@@ -55,7 +69,27 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings
 
-      - name: Run coverage check
-        uses: actions-rs/tarpaulin@v0.1
+  tarpaulin:
+    name: tarpaulin
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install rust stable
+        uses: actions-rs/toolchain@v1
         with:
-          args: '--ignore-tests'
+          toolchain: stable
+          override: true
+
+      - name: Set up build cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Install tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Run cargo tarpaulin
+        uses: actions-rs/cargo@v1
+        with:
+          command: tarpaulin
