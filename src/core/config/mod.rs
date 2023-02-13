@@ -2,11 +2,25 @@ pub mod path_and_query;
 pub mod scheme;
 
 use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
-
-use std::collections::HashMap;
+use derive_more::Display;
+use hashbrown::HashMap;
 
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
+
+#[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
+pub enum MethodName {
+    #[serde(alias = "search")]
+    Search,
+    #[serde(alias = "lookup")]
+    Lookup,
+}
+
+#[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
+pub enum ServiceName {
+    #[serde(rename(deserialize = "catalog"))]
+    Catalog,
+}
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HttpClientConfig {
@@ -50,11 +64,11 @@ pub enum ServiceDefinition {
         scheme: Scheme,
         #[serde(with = "http_serde::authority")]
         endpoint: Authority,
-        methods: HashMap<String, MethodDefinition>,
+        methods: HashMap<MethodName, MethodDefinition>,
     },
 }
 
-pub type Services = HashMap<String, ServiceDefinition>;
+pub type Services = HashMap<ServiceName, ServiceDefinition>;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
