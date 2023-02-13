@@ -110,9 +110,11 @@ async fn do_evaluate<JC: JsonClient>(
     let mut final_result: Option<Value> = None;
 
     for step in &cryptogram.steps {
+        let service_name = &step.service;
+        let method_name = &step.method;
         let service = services
-            .get(&step.service)
-            .ok_or_else(|| EvaluateError::UnknownService(step.service.to_owned()))?
+            .get(service_name)
+            .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
             .to_owned();
         final_result = match service {
             ServiceDefinition::Rest {
@@ -121,8 +123,8 @@ async fn do_evaluate<JC: JsonClient>(
                 methods,
             } => {
                 let method = methods
-                    .get(&step.method)
-                    .ok_or_else(|| EvaluateError::UnknownMethod(step.method.clone()))?;
+                    .get(method_name)
+                    .ok_or_else(|| EvaluateError::UnknownMethod(method_name.to_owned()))?;
 
                 let uri = Uri::builder()
                     .scheme(scheme)
