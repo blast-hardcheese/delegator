@@ -11,12 +11,12 @@ use derive_more::Display;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::config::{HttpClientConfig, ServiceDefinition, Services};
+use crate::config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    service: String,
-    method: String,
+    service: ServiceName,
+    method: MethodName,
     payload: Value,
 }
 
@@ -30,8 +30,8 @@ enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
     NoStepsSpecified,
-    UnknownMethod(String),
-    UnknownService(String),
+    UnknownMethod(MethodName),
+    UnknownService(ServiceName),
     UriBuilderError(error::HttpError),
 }
 
@@ -152,13 +152,13 @@ async fn routes_evaluate() {
     let cryptogram = JsonCryptogram {
         steps: vec![
             JsonCryptogramStep {
-                service: "service1".to_owned(),
-                method: "foo".to_owned(),
+                service: ServiceName::Catalog,
+                method: MethodName::Search,
                 payload: Value::String("first".to_owned()),
             },
             JsonCryptogramStep {
-                service: "service2".to_owned(),
-                method: "bar".to_owned(),
+                service: ServiceName::Catalog,
+                method: MethodName::Lookup,
                 payload: Value::String("second".to_owned()),
             },
         ],
@@ -170,7 +170,7 @@ async fn routes_evaluate() {
     };
 
     services.insert(
-        "service1".to_owned(),
+        ServiceName::Catalog,
         ServiceDefinition::Rest {
             scheme: Scheme::HTTP,
             endpoint: Authority::from_static("0:0"),
@@ -180,30 +180,15 @@ async fn routes_evaluate() {
                     HashMap::with_hasher(s)
                 };
                 methods.insert(
-                    "foo".to_owned(),
+                    MethodName::Search,
                     MethodDefinition {
-                        path: PathAndQuery::from_static("/query1"),
+                        path: PathAndQuery::from_static("/search/"),
                     },
                 );
-                methods
-            },
-        },
-    );
-
-    services.insert(
-        "service2".to_owned(),
-        ServiceDefinition::Rest {
-            scheme: Scheme::HTTP,
-            endpoint: Authority::from_static("0:0"),
-            methods: {
-                let mut methods = {
-                    let s = DefaultHashBuilder::default();
-                    HashMap::with_hasher(s)
-                };
                 methods.insert(
-                    "bar".to_owned(),
+                    MethodName::Lookup,
                     MethodDefinition {
-                        path: PathAndQuery::from_static("/query2"),
+                        path: PathAndQuery::from_static("/product_variants/"),
                     },
                 );
                 methods
