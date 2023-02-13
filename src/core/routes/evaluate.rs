@@ -8,6 +8,7 @@ use actix_web::{
 };
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
+use hashbrown::HashMap;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -29,6 +30,8 @@ pub struct JsonCryptogram {
 enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
+    InvalidStructure,
+    InvalidTransition,
     NoStepsSpecified,
     UnknownMethod(MethodName),
     UnknownService(ServiceName),
@@ -48,13 +51,57 @@ async fn evaluate(
         client_config: client_config.get_ref().clone(),
     };
 
-    let result = do_evaluate(
-        &mut cryptogram.into_inner(),
-        live_client,
-        services.get_ref(),
-    )
-    .await?;
+    let result = do_evaluate(cryptogram.into_inner(), live_client, services.get_ref()).await?;
     Ok(HttpResponse::Ok().json(&result))
+}
+
+fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, EvaluateError> {
+    let last = &state[step];
+    let next_idx = step + 1;
+    if !state.contains_key(&next_idx) {
+        return Ok(response);
+    }
+    let next = &state[&next_idx];
+
+    match ((&last.service, &last.method), (&next.service, &next.method)) {
+        (
+            (ServiceName::Catalog, MethodName::Search),
+            (ServiceName::Catalog, MethodName::Lookup),
+        ) => {
+            let mut query = next
+                .payload
+                .as_object()
+                .ok_or(EvaluateError::InvalidStructure)?
+                .clone();
+
+            // Results from search
+            let results = response
+                .as_object()
+                .and_then(|o| o.get("results"))
+                .and_then(|o| o.as_array())
+                .ok_or(EvaluateError::InvalidStructure)?;
+            let mut ids = vec![];
+            for result in results {
+                let id = result
+                    .as_object()
+                    .and_then(|o| o.get("product_variant_id"))
+                    .ok_or(EvaluateError::InvalidStructure)?;
+                ids.push(id.to_owned());
+            }
+            query.insert(String::from("ids"), Value::Array(ids.to_owned()));
+            let new_payload = Value::Object(query);
+            state.insert(
+                next_idx,
+                JsonCryptogramStep {
+                    service: next.service.clone(),
+                    method: next.method.clone(),
+                    payload: new_payload.clone(),
+                },
+            );
+            Ok(new_payload)
+        }
+        _other => Err(EvaluateError::InvalidTransition),
+    }
 }
 
 #[async_trait(?Send)]
@@ -107,16 +154,20 @@ impl JsonClient for TestJsonClient {
     }
 }
 
+type State = HashMap<usize, JsonCryptogramStep>;
+
 async fn do_evaluate<JC: JsonClient>(
-    cryptogram: &mut JsonCryptogram,
+    cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
 ) -> Result<Value, EvaluateError> {
     let mut final_result: Option<Value> = None;
 
-    for step in &cryptogram.steps {
-        let service_name = &step.service;
-        let method_name = &step.method;
+    let mut state: State = cryptogram.steps.into_iter().enumerate().collect();
+    let mut step: usize = 0;
+    while step < state.len() {
+        let service_name = &state[&step].service;
+        let method_name = &state[&step].method;
         let service = services
             .get(service_name)
             .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
@@ -138,13 +189,14 @@ async fn do_evaluate<JC: JsonClient>(
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
 
-                let payload = &step.payload;
+                let payload = &state[&step].payload;
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
                     .await?;
-                Some(result)
+                Some(post(&step, &mut state, result)?)
             }
         };
+        step += 1;
     }
 
     final_result.ok_or(EvaluateError::NoStepsSpecified)
@@ -153,21 +205,22 @@ async fn do_evaluate<JC: JsonClient>(
 #[actix_web::test]
 async fn routes_evaluate() {
     use crate::config::MethodDefinition;
+    use crate::config::{MethodName, ServiceName};
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
-    use hashbrown::HashMap;
+    use serde_json::json;
 
-    let mut cryptogram = JsonCryptogram {
+    let cryptogram = JsonCryptogram {
         steps: vec![
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Search,
-                payload: Value::String("first".to_owned()),
+                payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
-                payload: Value::String("second".to_owned()),
+                payload: json!({ "ids": [] }),
             },
         ],
     };
@@ -204,8 +257,11 @@ async fn routes_evaluate() {
         },
     );
 
-    match do_evaluate(&mut cryptogram, TestJsonClient, &services).await {
-        Ok(value) => assert_eq!(value, Value::String("second".to_owned())),
+    match do_evaluate(cryptogram, TestJsonClient, &services).await {
+        Ok(value) => assert_eq!(
+            value,
+            json!({ "ids": ["12313bb7-6068-4ec9-ac49-3e834181f127"] })
+        ),
         other => {
             let _ = other.unwrap();
         }
