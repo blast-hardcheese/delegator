@@ -48,7 +48,12 @@ async fn evaluate(
         client_config: client_config.get_ref().clone(),
     };
 
-    let result = do_evaluate(cryptogram.into_inner(), live_client, services.get_ref()).await?;
+    let result = do_evaluate(
+        &mut cryptogram.into_inner(),
+        live_client,
+        services.get_ref(),
+    )
+    .await?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -103,7 +108,7 @@ impl JsonClient for TestJsonClient {
 }
 
 async fn do_evaluate<JC: JsonClient>(
-    cryptogram: JsonCryptogram,
+    cryptogram: &mut JsonCryptogram,
     json_client: JC,
     services: &Services,
 ) -> Result<Value, EvaluateError> {
@@ -152,7 +157,7 @@ async fn routes_evaluate() {
     use hashbrown::hash_map::DefaultHashBuilder;
     use hashbrown::HashMap;
 
-    let cryptogram = JsonCryptogram {
+    let mut cryptogram = JsonCryptogram {
         steps: vec![
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
@@ -199,7 +204,7 @@ async fn routes_evaluate() {
         },
     );
 
-    match do_evaluate(cryptogram, TestJsonClient, &services).await {
+    match do_evaluate(&mut cryptogram, TestJsonClient, &services).await {
         Ok(value) => assert_eq!(value, Value::String("second".to_owned())),
         other => {
             let _ = other.unwrap();
