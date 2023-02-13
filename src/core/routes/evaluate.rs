@@ -30,6 +30,7 @@ pub struct JsonCryptogram {
 enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
+    InvalidStep(usize),
     InvalidStructure,
     InvalidTransition,
     NoStepsSpecified,
@@ -166,8 +167,9 @@ async fn do_evaluate<JC: JsonClient>(
     let mut state: State = cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
     while step < state.len() {
-        let service_name = &state[&step].service;
-        let method_name = &state[&step].method;
+        let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
+        let service_name = &current_step.service;
+        let method_name = &current_step.method;
         let service = services
             .get(service_name)
             .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
@@ -189,7 +191,7 @@ async fn do_evaluate<JC: JsonClient>(
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
 
-                let payload = &state[&step].payload;
+                let payload = &current_step.payload;
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
                     .await?;
