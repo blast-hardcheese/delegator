@@ -58,7 +58,7 @@ trait JsonClient {
         &self,
         method: Method,
         uri: Uri,
-        value: Value,
+        value: &Value,
     ) -> Result<Value, EvaluateError>;
 }
 
@@ -73,13 +73,13 @@ impl JsonClient for LiveJsonClient {
         &self,
         method: Method,
         uri: Uri,
-        payload: Value,
+        payload: &Value,
     ) -> Result<Value, EvaluateError> {
         self.client
             .request(method, uri)
             .insert_header(("User-Agent", self.client_config.user_agent.clone()))
             .insert_header(("Content-Type", "application/json"))
-            .send_json(&payload)
+            .send_json(payload)
             .await
             .map_err(EvaluateError::ClientError)?
             .json::<Value>()
@@ -96,9 +96,9 @@ impl JsonClient for TestJsonClient {
         &self,
         _method: Method,
         _uri: Uri,
-        payload: Value,
+        payload: &Value,
     ) -> Result<Value, EvaluateError> {
-        Ok(payload)
+        Ok(payload.clone())
     }
 }
 
@@ -133,8 +133,9 @@ async fn do_evaluate<JC: JsonClient>(
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
 
+                let payload = &step.payload;
                 let result = json_client
-                    .issue_request(Method::POST, uri, step.payload.clone())
+                    .issue_request(Method::POST, uri, payload)
                     .await?;
                 Some(result)
             }
