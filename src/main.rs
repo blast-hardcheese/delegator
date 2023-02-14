@@ -28,6 +28,7 @@ async fn main() -> Result<()> {
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
     let Configuration {
+        environment: _,
         http,
         sentry,
         services,

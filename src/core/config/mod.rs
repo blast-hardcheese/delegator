@@ -72,6 +72,7 @@ pub type Services = HashMap<ServiceName, ServiceDefinition>;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
+    pub environment: String,
     pub http: HttpConfig,
     pub sentry: SentryConfig,
     pub services: Services,
