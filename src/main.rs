@@ -1,7 +1,9 @@
 use std::io::{Error, ErrorKind, Result};
 
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
-use delegator_core::config::{Configuration, HttpClientConfig, Services};
+use delegator_core::config::{
+    Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation, Services,
+};
 
 enum InitErrors {
     MissingConfigFile,
@@ -28,12 +30,26 @@ async fn main() -> Result<()> {
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
     let Configuration {
-        environment: _,
+        environment,
         http,
         sentry,
-        services,
-        environments: _,
+        mut services,
+        environments,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
+
+    for (service_name, service) in services.iter_mut() {
+        let ServiceDefinition::Rest {
+            scheme,
+            authority,
+            methods: _,
+        } = service;
+        let ServiceLocation {
+            scheme: new_scheme,
+            authority: new_authority,
+        } = environments[&environment][service_name].clone();
+        *scheme = new_scheme;
+        *authority = new_authority;
+    }
 
     let _guard = sentry::init((
         sentry.dsn,
