@@ -63,7 +63,7 @@ pub enum ServiceDefinition {
         #[serde(with = "scheme")]
         scheme: Scheme,
         #[serde(with = "http_serde::authority")]
-        endpoint: Authority,
+        authority: Authority,
         methods: HashMap<MethodName, MethodDefinition>,
     },
 }
