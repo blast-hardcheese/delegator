@@ -71,11 +71,20 @@ pub enum ServiceDefinition {
 pub type Services = HashMap<ServiceName, ServiceDefinition>;
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct ServiceLocation {
+    #[serde(with = "scheme")]
+    pub scheme: Scheme,
+    #[serde(with = "http_serde::authority")]
+    pub authority: Authority,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
     pub environment: String,
     pub http: HttpConfig,
     pub sentry: SentryConfig,
     pub services: Services,
+    pub environments: HashMap<String, HashMap<ServiceName, ServiceLocation>>,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, Error> {

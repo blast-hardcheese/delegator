@@ -32,6 +32,7 @@ async fn main() -> Result<()> {
         http,
         sentry,
         services,
+        environments: _,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
 
     let _guard = sentry::init((
