@@ -9,13 +9,14 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
 use hashbrown::HashMap;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
-    translate,
     translate::Language,
+    translate::{self, parse::parse_language},
 };
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +61,20 @@ async fn evaluate(
     Ok(HttpResponse::Ok().json(&result))
 }
 
+type MethodSpec = (ServiceName, MethodName);
+
+static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::new(|| {
+    HashMap::from_iter(vec![(
+        (
+            (ServiceName::Catalog, MethodName::Search),
+            (ServiceName::Catalog, MethodName::Lookup),
+        ),
+        parse_language(r#".results | { "ids": map(.product_variant_id) }"#)
+            .unwrap()
+            .1,
+    )])
+});
+
 fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, EvaluateError> {
     let last = &state[step];
     let next_idx = step + 1;
@@ -68,34 +83,26 @@ fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, Evalu
     }
     let next = &state[&next_idx];
 
-    match ((&last.service, &last.method), (&next.service, &next.method)) {
-        (
-            (ServiceName::Catalog, MethodName::Search),
-            (ServiceName::Catalog, MethodName::Lookup),
-        ) => {
-            let prog = Language::Focus(
-                String::from("results"),
-                Box::new(Language::Object(vec![(
-                    String::from("ids"),
-                    Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
-                )])),
-            );
+    let prog = TRANSITIONS
+        .get(&(
+            (last.service.clone(), last.method.clone()),
+            (next.service.clone(), next.method.clone()),
+        ))
+        .ok_or(EvaluateError::InvalidTransition)?;
 
-            let new_payload =
-                translate::step(prog, &response).map_err(|_e| EvaluateError::InvalidStructure)?;
+    let new_payload =
+        translate::step(prog.clone(), &response).map_err(|_e| EvaluateError::InvalidStructure)?;
 
-            state.insert(
-                next_idx,
-                JsonCryptogramStep {
-                    service: next.service.clone(),
-                    method: next.method.clone(),
-                    payload: new_payload.clone(),
-                },
-            );
-            Ok(new_payload)
-        }
-        _other => Err(EvaluateError::InvalidTransition),
-    }
+    state.insert(
+        next_idx,
+        JsonCryptogramStep {
+            service: next.service.clone(),
+            method: next.method.clone(),
+            payload: new_payload.clone(),
+        },
+    );
+
+    Ok(new_payload)
 }
 
 #[async_trait(?Send)]
