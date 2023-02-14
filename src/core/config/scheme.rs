@@ -7,7 +7,7 @@ impl<'de> Visitor<'de> for ConfigSchemeVisitor {
     type Value = Scheme;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("EXPECTED: http")
+        formatter.write_str("EXPECTED: http, https")
     }
 
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
@@ -16,6 +16,7 @@ impl<'de> Visitor<'de> for ConfigSchemeVisitor {
     {
         match v {
             "http" => Ok(Scheme::HTTP),
+            "https" => Ok(Scheme::HTTPS),
             _other => Err(E::custom("Unexpected scheme")),
         }
     }
