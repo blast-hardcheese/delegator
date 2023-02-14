@@ -177,7 +177,7 @@ async fn do_evaluate<JC: JsonClient>(
         final_result = match service {
             ServiceDefinition::Rest {
                 scheme,
-                endpoint,
+                authority,
                 methods,
             } => {
                 let method = methods
@@ -186,7 +186,7 @@ async fn do_evaluate<JC: JsonClient>(
 
                 let uri = Uri::builder()
                     .scheme(scheme)
-                    .authority(endpoint)
+                    .authority(authority)
                     .path_and_query(method.path.to_owned())
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
@@ -236,7 +236,7 @@ async fn routes_evaluate() {
         ServiceName::Catalog,
         ServiceDefinition::Rest {
             scheme: Scheme::HTTP,
-            endpoint: Authority::from_static("0:0"),
+            authority: Authority::from_static("0:0"),
             methods: {
                 let mut methods = {
                     let s = DefaultHashBuilder::default();
