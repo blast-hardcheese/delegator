@@ -16,7 +16,7 @@ path = "src/core/core.rs"
 [dependencies]
 actix-web = "4.2.1"
 async-trait = "0.1.64"
-awc = { version = "3.0.1", features = ["openssl"] }
+awc = { version = "3.1.0", features = ["openssl"] }
 derive_more = "0.99.17"
 env_logger = "0.9.3"
 hashbrown = { version = "0.12.3", features = ["serde"] }
