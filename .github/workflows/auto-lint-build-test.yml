@@ -13,6 +13,7 @@ jobs:
 
   check-terraform:
     uses: ./.github/workflows/mod-deploy-to-env.yml
+    if: github.secret_source == 'Actions'  # Dependabot has no access to AWS_*
     with:
       environment  : stag
       aws_region   : us-east-1
