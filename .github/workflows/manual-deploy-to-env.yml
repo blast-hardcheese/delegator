@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'The environment in which to deploy the API and DB Migrations images.'
+        description: 'The environment in which to deploy.'
         type: choice
         default: stag
         required: true
@@ -13,7 +13,7 @@ on:
           - thunderdome
           - prod
       aws_region:
-        description: 'The AWS Region in which to deploy the API and DB Migrations images.'
+        description: 'The AWS Region in which to deploy.'
         required: true
         type: choice
         default: us-east-1
@@ -23,19 +23,19 @@ on:
         description: 'The Docker image tag of the image to deploy.'
         type: string
         required: true
-      do_dry_run:
-        description: 'If true, then terragrunt apply will not be run -- only plan.  No changes will be made to our infrastructure.'
+      apply:
+        description: 'Uncheck to only run the plan.'
         default: true
         type: boolean 
 
 jobs:
   call-deploy-to-env:
-    uses: ./.github/workflows/mod-deploy-to-env.yml
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@dstewart/ONE-1003/reflow-github-actions
     with:
       environment  : ${{ inputs.environment }}
       aws_region   : ${{ inputs.aws_region }}
       app_image_tag: ${{ inputs.app_image_tag }}
-      do_dry_run   : ${{ inputs.do_dry_run }}
+      apply        : ${{ inputs.tfapply }}
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
