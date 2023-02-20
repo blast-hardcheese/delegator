@@ -3,6 +3,10 @@ name: Lint, Build, and Test
 on:
   workflow_call:
     secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
       CI_ACCESS_TOKEN:
         required: true
 
@@ -13,36 +17,16 @@ env:
 jobs:
   lint-build:
     name: Lint, Build, and Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt
-
-      - name: Set up build cache
-        uses: swatinem/rust-cache@v2
-
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - name: Run cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Build docker image
-        run: |
-          make docker_build_debug
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@dstewart/ONE-1003/reflow-github-actions
+    with:
+      image_name: delegator
+      build_args: |
+        BASE_IMAGE=ubuntu
+        BASE_IMAGE_TAG=latest
+        RUST_STAGE=debug
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   clippy:
     name: clippy

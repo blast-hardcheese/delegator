@@ -3,20 +3,11 @@ BASE_IMAGE         := ubuntu
 BASE_IMAGE_TAG     := latest
 DOCKER_BUILDKIT    := 1
 
-.PHONY: all docker_build docker_build_debug docker_build_release 
+.PHONY: all docker_build docker_build_release
 
 all:
 
 docker_build: docker_build_release
-
-docker_build_debug: Dockerfile
-	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) \
-	docker -D build \
-		--build-arg BASE_IMAGE='$(BASE_IMAGE)' \
-		--build-arg BASE_IMAGE_TAG='$(BASE_IMAGE_TAG)' \
-		--build-arg RUST_STAGE='debug' \
-		--tag $(CONTAINER_NAME) \
-		.
 
 docker_build_release: Dockerfile
 	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) \
