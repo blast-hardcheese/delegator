@@ -1,14 +1,9 @@
 name: Lint, Build, and Test
 
 on:
-  workflow_call:
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      CI_ACCESS_TOKEN:
-        required: true
+  push:
+    branches-ignore:
+      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -85,3 +80,16 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: tarpaulin
+
+  check-terraform:
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@dstewart/ONE-1003/reflow-github-actions
+    if: github.secret_source == 'Actions'  # Dependabot has no access to AWS_*
+    with:
+      environment  : stag
+      aws_region   : us-east-1
+      app_image_tag: this-is-not-a-valid-tag
+      apply        : false
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
