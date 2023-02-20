@@ -42,74 +42,20 @@ env:
   ENV                  : ${{ inputs.environment }}
 
 jobs:
-  build-test-push:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.image_tag.outputs.tag }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          # We have to use fetch-depth 0 so that checkout will grab the full
-          # history, which is needed to lookup tags in the "Determine image tag"
-          # step.  By default the checkout action only pulls the latest commit.
-          fetch-depth: 0
-
-      - name: Install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
-
-      - name: Determine image tag
-        id: image_tag
-        run: |
-          echo "GITHUB_REF:      ${GITHUB_REF}"
-          echo "GITHUB_REF_NAME: ${GITHUB_REF_NAME}"
-          tag="$(git describe --tags @ 2>/dev/null || echo "${GITHUB_REF_NAME}")"
-          echo "tag=${tag}" >> ${GITHUB_OUTPUT}
-
-      - name: Verify image tag
-        env:
-          IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
-        run: |
-          echo "Using Image Tag: ${IMAGE_TAG}"
-
-      - name: Set up rust build cache
-        uses: swatinem/rust-cache@v2
-
-      - name: Run cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
-
-      - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --release
-
-      - name: Build docker image
-        env:
-          IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
-        run: |
-          make docker_build
-
-      - name: Login to ECR
-        id: ecr_login
-        run: |
-          aws ecr get-login-password --region us-east-1 \
-            | docker login --username AWS --password-stdin ${ECR_HOST}
-
-      - name: Docker Push App
-        env:
-          IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
-        run: |
-          docker tag ${APP_IMAGE_NAME}:latest ${APP_ECR_IMAGE}:${IMAGE_TAG}
-          docker push ${APP_ECR_IMAGE}:${IMAGE_TAG}
+  build-push:
+    name: Build, push
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@dstewart/ONE-1003/reflow-github-actions
+    with:
+      image_name: delegator
+      push: true
+      build_args: |
+        BASE_IMAGE=ubuntu
+        BASE_IMAGE_TAG=latest
+        RUST_STAGE=release
+        CARGO_ARGS=--release
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       # TODO: In a future update, we need to figure out how to integrate sentry
       # with rust and provide it our debugging symbols.  It looks like a fairly
@@ -138,11 +84,11 @@ jobs:
   call-deploy-to-env:
     uses: ./.github/workflows/mod-deploy-to-env.yml
     needs:
-      - build-test-push
+      - build-push
     with:
       environment  : ${{ inputs.environment }}
       aws_region   : ${{ inputs.aws_region }}
-      app_image_tag: ${{ needs.build-test-push.outputs.tag }}
+      app_image_tag: ${{ needs.build-push.outputs.tag }}
       do_dry_run   : false
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
