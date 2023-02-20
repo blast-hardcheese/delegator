@@ -6,12 +6,12 @@ on:
       - master
 
 jobs:
-  call-lint-build-test:
+  build:
     uses: ./.github/workflows/mod-lint-build-test.yml
     secrets: 
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      CI_ACCESS_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+      CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
 
   check-terraform:
     uses: ./.github/workflows/mod-deploy-to-env.yml
