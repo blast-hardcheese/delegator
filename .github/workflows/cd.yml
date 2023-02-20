@@ -1,45 +1,37 @@
 name: Build, Test, Push, Deploy
 
 on:
-  workflow_call:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
     inputs:
       environment:
-        description: 'The environment in which to deploy the App.'
+        description: 'The environment in which to deploy.'
+        type: choice
+        default: stag
         required: true
-        type: string
+        options:
+          - stag
+          - thunderdome
+          - prod
       aws_region:
         description: 'The AWS Region in which to deploy.'
+        required: true
+        type: choice
         default: us-east-1
-        type: string
-      ecr_host:
-        description: 'The ECR hostname to which to deploy'
-        default: 736898943770.dkr.ecr.us-east-1.amazonaws.com
-        type: string
-      app_image_name:
-        description: 'The image name (default: delegator)'
-        default: delegator
-        type: string
-    secrets:
-      AWS_ACCESS_KEY_ID:
-        required: true
-      AWS_SECRET_ACCESS_KEY:
-        required: true
-      CI_ACCESS_TOKEN:
-        required: true
-      SENTRY_BEARER_TOKEN:
-        required: true
+        options:
+          - us-east-1
 
 env:
   MASTER_BRANCH        : master
   AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   GITHUB_TOKEN         : ${{ secrets.CI_ACCESS_TOKEN }}
-  AWS_REGION           : ${{ inputs.aws_region }}
-  ECR_HOST             : ${{ inputs.ecr_host }}
+  AWS_REGION           : ${{ inputs.aws_region || 'us-east-1' }}
   APP_IMAGE_NAME       : ${{ inputs.app_image_name }}
-  APP_ECR_IMAGE        : ${{ inputs.ecr_host }}/${{ inputs.app_image_name }}
   SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
-  ENV                  : ${{ inputs.environment }}
+  ENV                  : ${{ inputs.environment || 'stag' }}
 
 jobs:
   build-push:
@@ -86,8 +78,8 @@ jobs:
     needs:
       - build-push
     with:
-      environment  : ${{ inputs.environment }}
-      aws_region   : ${{ inputs.aws_region }}
+      environment  : ${{ env.ENV }}
+      aws_region   : ${{ env.AWS_REGION }}
       app_image_tag: ${{ needs.build-push.outputs.tag }}
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
