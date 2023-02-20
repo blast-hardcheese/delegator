@@ -1,6 +1,9 @@
 name: Manual Build, Test, Push, Deploy
 
 on: 
+  push:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       environment:
@@ -24,8 +27,8 @@ jobs:
   call-build-test-push-deploy:
     uses: ./.github/workflows/mod-build-test-push-deploy.yml
     with:
-      environment  : ${{ inputs.environment }}
-      aws_region   : ${{ inputs.aws_region }}
+      environment  : ${{ inputs.environment || 'stag' }}
+      aws_region   : ${{ inputs.aws_region || 'us-east-1' }}
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
