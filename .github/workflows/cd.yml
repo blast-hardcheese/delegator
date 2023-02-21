@@ -1,0 +1,85 @@
+name: Build, Test, Push, Deploy
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'The environment in which to deploy.'
+        type: choice
+        default: stag
+        required: true
+        options:
+          - stag
+          - thunderdome
+          - prod
+      aws_region:
+        description: 'The AWS Region in which to deploy.'
+        required: true
+        type: choice
+        default: us-east-1
+        options:
+          - us-east-1
+
+env:
+  MASTER_BRANCH        : master
+  AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  GITHUB_TOKEN         : ${{ secrets.CI_ACCESS_TOKEN }}
+  AWS_REGION           : ${{ inputs.aws_region || 'us-east-1' }}
+  APP_IMAGE_NAME       : ${{ inputs.app_image_name }}
+  SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
+  ENV                  : ${{ inputs.environment || 'stag' }}
+
+jobs:
+  build-push:
+    name: Build, push
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    with:
+      image_name: delegator
+      push: true
+      build_args: |
+        RUST_STAGE=release
+        CARGO_ARGS=--release
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      # TODO: In a future update, we need to figure out how to integrate sentry
+      # with rust and provide it our debugging symbols.  It looks like a fairly
+      # involved job and is out of scope for now.  The general structure should
+      # loosely follow what is below so this is being left in but commented out,
+      # for now.
+
+      # - name: Copy dist out of app container
+      #   env:
+      #     IMAGE_TAG: ${{ steps.image_tag.outputs.tag }}
+      #   run: |
+      #     docker create --name app ${APP_IMAGE_NAME}:latest
+      #     docker cp app:/app/dist ./dist
+
+      # - name: Sentry Release
+      #   uses: getsentry/action-release@v1.2.0
+      #   env:
+      #     SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_BEARER_TOKEN }}
+      #     SENTRY_ORG: appreciate-stuff
+      #     SENTRY_PROJECT: delegator
+      #   with:
+      #     sourcemaps: './dist'
+      #     ignore_missing: true
+      #     version: ${{ steps.image_tag.outputs.tag }}
+
+  call-deploy-to-env:
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    needs:
+      - build-push
+    with:
+      environment  : ${{ env.ENV }}
+      aws_region   : ${{ env.AWS_REGION }}
+      app_image_tag: ${{ needs.build-push.outputs.tag }}
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}

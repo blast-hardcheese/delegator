@@ -1,10 +1,9 @@
 name: Lint, Build, and Test
 
 on:
-  workflow_call:
-    secrets:
-      CI_ACCESS_TOKEN:
-        required: true
+  push:
+    branches-ignore:
+      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,36 +12,14 @@ env:
 jobs:
   lint-build:
     name: Lint, Build, and Test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt
-
-      - name: Set up build cache
-        uses: swatinem/rust-cache@v2
-
-      - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-
-      - name: Run cargo build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-
-      - name: Build docker image
-        run: |
-          make docker_build_debug
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    with:
+      image_name: delegator
+      build_args: |
+        RUST_STAGE=debug
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   clippy:
     name: clippy
@@ -101,3 +78,16 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: tarpaulin
+
+  check-terraform:
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    if: github.secret_source == 'Actions'  # Dependabot has no access to AWS_*
+    with:
+      environment  : stag
+      aws_region   : us-east-1
+      app_image_tag: this-is-not-a-valid-tag
+      apply        : false
+    secrets:
+      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
