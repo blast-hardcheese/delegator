@@ -41,8 +41,6 @@ jobs:
       image_name: delegator
       push: true
       build_args: |
-        BASE_IMAGE=ubuntu
-        BASE_IMAGE_TAG=latest
         RUST_STAGE=release
         CARGO_ARGS=--release
     secrets:

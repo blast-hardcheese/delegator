@@ -16,8 +16,6 @@ jobs:
     with:
       image_name: delegator
       build_args: |
-        BASE_IMAGE=ubuntu
-        BASE_IMAGE_TAG=latest
         RUST_STAGE=debug
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
