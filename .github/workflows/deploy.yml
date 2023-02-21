@@ -30,7 +30,7 @@ on:
 
 jobs:
   call-deploy-to-env:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@dstewart/ONE-1003/reflow-github-actions
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
     with:
       environment  : ${{ inputs.environment }}
       aws_region   : ${{ inputs.aws_region }}
