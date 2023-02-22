@@ -35,7 +35,7 @@ jobs:
       environment  : ${{ inputs.environment }}
       aws_region   : ${{ inputs.aws_region }}
       app_image_tag: ${{ inputs.app_image_tag }}
-      apply        : ${{ inputs.tfapply }}
+      apply        : ${{ inputs.apply }}
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
