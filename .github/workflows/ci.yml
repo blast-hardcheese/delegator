@@ -12,7 +12,7 @@ env:
 jobs:
   lint-build:
     name: Lint, Build, and Test
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@702581b456499eb972f07b093b325f5efaa7dbfd  # v0.1.1
     with:
       image_name: delegator
       build_args: |
@@ -80,7 +80,7 @@ jobs:
           command: tarpaulin
 
   check-terraform:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@702581b456499eb972f07b093b325f5efaa7dbfd  # v0.1.1
     if: github.secret_source == 'Actions'  # Dependabot has no access to AWS_*
     with:
       environment  : stag

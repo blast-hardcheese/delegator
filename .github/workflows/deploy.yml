@@ -30,7 +30,7 @@ on:
 
 jobs:
   call-deploy-to-env:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@4d0f5c2caeca99e67b55475be65af535f0aad325  # v0.1.0
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@702581b456499eb972f07b093b325f5efaa7dbfd  # v0.1.1
     with:
       environment  : ${{ inputs.environment }}
       aws_region   : ${{ inputs.aws_region }}
