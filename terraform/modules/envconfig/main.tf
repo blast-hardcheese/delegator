@@ -1,5 +1,5 @@
 module "legacy" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-infra-legacy"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-infra-legacy?ref=v0.1.0"
 }
 
 locals {
@@ -15,7 +15,7 @@ locals {
 }
 
 module "label" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-resource-label"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-resource-label?ref=v0.1.0"
 
   namespace   = local.namespace
   product     = local.product
@@ -39,7 +39,7 @@ data "aws_acm_certificate" "ssl_cert" {
 }
 
 module "alb" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb?ref=v0.1.0"
 
   context = module.label.context
 
@@ -219,7 +219,7 @@ locals {
 }
 
 module "ecs_service" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-ecs-service"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ecs-service?ref=v0.1.0"
 
   enable          = "true"
   name            = local.component
