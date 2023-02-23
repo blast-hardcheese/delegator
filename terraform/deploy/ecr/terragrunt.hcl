@@ -17,5 +17,5 @@ inputs = {
 }
 
 terraform {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-ecr-repository//"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ecr-repository//?ref=v0.1.0"
 }
