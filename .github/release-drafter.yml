@@ -2,9 +2,11 @@ name-template: 'v$RESOLVED_VERSION'
 tag-template: 'v$RESOLVED_VERSION'
 categories:
   - title: '🚀 Features'
-    label: 'enhancement'
+    labels:
+      - 'enhancement'
   - title: '🐛 Bug Fixes'
-    label: 'bug'
+    labels:
+      - 'bug'
   - title: '🧰 Maintenance'
     label: 'chore'
   - title: '⚙️ Dependencies'
@@ -25,6 +27,9 @@ version-resolver:
     labels:
       - 'dependencies'
   default: patch
+replacers:
+  - search: '/\[*ONE-(\d+)\]*\s*[:-]*\s*/g'
+    replace: '[ONE-$1](https://appreciates.atlassian.net/browse/ONE-$1): '
 template: |
   ## Changes
 
