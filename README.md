@@ -7,7 +7,7 @@ Analysis, Planning, and Routing of cryptograms, a part of the appreciate platfor
   - [Setup](#setup)
     - [Install dependencies](#install-dependencies)
     - [Typecheck](#typecheck)
-    - [Run the service with hot-reload enabled](#run-the-service-with-hot-reload-enabled)
+    - [Run the service](#run-the-service)
   - [Run all tests](#run-tests)
     - [Run some tests](#run-some-tests)
 
@@ -27,9 +27,22 @@ Only run the typechecking phase (faster than a full build, good for development)
 $ cargo watch
 ```
 
-### Run the service with hot-reload enabled
+### Run the service
+
 ```bash
-$ RUST_LOG=actix_web=debug RUST_BACKTRACE=1 ENVIRONMENT=development cargo watch -x 'run ./config/development.conf'
+$ cargo run ./config/development.conf
+```
+
+Or with hot-reload...
+
+```bash
+$ cargo watch -x 'run ./config/development.conf'
+```
+
+Or with more logging...
+
+```bash
+$ RUST_LOG=actix_web=debug RUST_BACKTRACE=1 cargo watch -x 'run ./config/development.conf'
 ```
 
 ## Run all tests
