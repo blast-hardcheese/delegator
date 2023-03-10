@@ -8,6 +8,8 @@ use delegator_core::config::{
 enum InitErrors {
     MissingConfigFile,
     ErrorLoadingConfig(hocon::Error),
+    ErrorLoadingRegistryEnvironment(String),
+    ErrorLoadingRegistryService(String, String),
 }
 
 impl From<InitErrors> for Error {
@@ -18,6 +20,14 @@ impl From<InitErrors> for Error {
                 "First argument to the server must be a path to the config file",
             ),
             InitErrors::ErrorLoadingConfig(err) => Error::new(ErrorKind::Other, err.to_string()),
+            InitErrors::ErrorLoadingRegistryEnvironment(env) => Error::new(
+                ErrorKind::Other,
+                format!("Missing registry environment: {}", env),
+            ),
+            InitErrors::ErrorLoadingRegistryService(env, service_name) => Error::new(
+                ErrorKind::Other,
+                format!("Missing registry service: {}:{}", env, service_name),
+            ),
         }
     }
 }
@@ -46,7 +56,17 @@ async fn main() -> Result<()> {
         let ServiceLocation {
             scheme: new_scheme,
             authority: new_authority,
-        } = environments[&environment][service_name].clone();
+        } = environments
+            .get(&environment)
+            .ok_or_else(|| InitErrors::ErrorLoadingRegistryEnvironment(environment.clone()))?
+            .get(service_name)
+            .ok_or_else(|| {
+                InitErrors::ErrorLoadingRegistryService(
+                    environment.clone(),
+                    service_name.to_string(),
+                )
+            })?
+            .clone();
         *scheme = new_scheme;
         *authority = new_authority;
     }
