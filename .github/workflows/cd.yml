@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'The environment in which to deploy.'
+        description: "The environment in which to deploy."
         type: choice
         default: stag
         required: true
@@ -21,7 +21,7 @@ on:
           - thunderdome
           - prod
       aws_region:
-        description: 'The AWS Region in which to deploy.'
+        description: "The AWS Region in which to deploy."
         required: true
         type: choice
         default: us-east-1
@@ -29,19 +29,19 @@ on:
           - us-east-1
 
 env:
-  MASTER_BRANCH        : master
   AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   GITHUB_TOKEN         : ${{ secrets.CI_ACCESS_TOKEN }}
   SENTRY_BEARER_TOKEN  : ${{ secrets.SENTRY_BEARER_TOKEN }}
 
 jobs:
-  build-push:
+  docker-build-push:
     name: Build, push
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@702581b456499eb972f07b093b325f5efaa7dbfd  # v0.1.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@f6262e0a7203de0449cd3d7ab55e2f310e41a633 # v0.3.2
     with:
       image_name: delegator
-      push: true
+      push      : true
+      migrations: false
       build_args: |
         RUST_STAGE=release
         CARGO_ARGS=--release
@@ -50,13 +50,15 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   call-deploy-to-env:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@702581b456499eb972f07b093b325f5efaa7dbfd  # v0.1.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@72e9d028074d15065fc5830e34532a1b06a25df7 # v1.0.0
     needs:
-      - build-push
+      - docker-build-push
     with:
-      environment  : ${{ inputs.environment || 'stag' }}
-      aws_region   : ${{ inputs.aws_region || 'us-east-1' }}
-      app_image_tag: ${{ needs.build-push.outputs.tag }}
+      environment       : ${{ inputs.environment || 'stag' }}
+      aws_region        : ${{ inputs.aws_region || 'us-east-1' }}
+      image_tag         : ${{ needs.docker-build-push.outputs.tag }}
+      apply             : true
+      migrations        : false
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
