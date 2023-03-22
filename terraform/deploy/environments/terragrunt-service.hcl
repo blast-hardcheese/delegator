@@ -10,8 +10,8 @@ dependencies {
 }
 
 locals {
-  aws_region = basename(get_terragrunt_dir())
-  env        = basename(dirname(get_terragrunt_dir()))
+  aws_region = basename(dirname(get_terragrunt_dir()))
+  env        = basename(dirname(dirname(get_terragrunt_dir())))
   image_tag  = get_env("IMAGE_TAG")
   namespace  = "app"
   product    = "platform"
