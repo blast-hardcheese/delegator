@@ -54,11 +54,11 @@ jobs:
     needs:
       - docker-build-push
     with:
-      environment       : ${{ inputs.environment || 'stag' }}
-      aws_region        : ${{ inputs.aws_region || 'us-east-1' }}
-      image_tag         : ${{ needs.docker-build-push.outputs.tag }}
-      apply             : true
-      migrations        : false
+      environment: ${{ inputs.environment || 'stag' }}
+      aws_region : ${{ inputs.aws_region || 'us-east-1' }}
+      image_tag  : ${{ needs.docker-build-push.outputs.tag }}
+      apply      : true
+      migrations : false
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
