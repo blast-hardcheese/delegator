@@ -39,7 +39,7 @@ data "aws_acm_certificate" "ssl_cert" {
 }
 
 module "alb" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb?ref=v0.1.0"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb?ref=v0.2.0"
 
   context = module.label.context
 
