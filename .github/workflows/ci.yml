@@ -54,30 +54,37 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings
 
-  tarpaulin:
-    name: tarpaulin
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Set up build cache
-        uses: swatinem/rust-cache@v2
-
-      - name: Install tarpaulin
-        run: cargo install cargo-tarpaulin
-
-      - name: Run cargo tarpaulin
-        uses: actions-rs/cargo@v1
-        with:
-          command: tarpaulin
+#  Tarpaulin is a code coverage tool, but it can't differentiate between our
+#  code and our library code, so it ends up rebuilding everything from scratch
+#  every CI run.
+#
+#  Possibly enable this on merge to master, but we're not consuming these
+#  metrics right now so disable it and save some build credits.
+#
+#  tarpaulin:
+#    name: tarpaulin
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v2
+#
+#      - name: Install rust stable
+#        uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#          override: true
+#
+#      - name: Set up build cache
+#        uses: swatinem/rust-cache@v2
+#
+#      - name: Install tarpaulin
+#        run: cargo install cargo-tarpaulin
+#
+#      - name: Run cargo tarpaulin
+#        uses: actions-rs/cargo@v1
+#        with:
+#          command: tarpaulin
 
   check-terraform:
     uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@72e9d028074d15065fc5830e34532a1b06a25df7 # v1.0.0
