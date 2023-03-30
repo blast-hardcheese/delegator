@@ -11,7 +11,13 @@ locals {
   image_name      = local.component
   image_tag       = var.image_tag
   container_port  = 80
+
   domain_name     = "appreciate.it"
+  subdomain_names = {
+    stag        = "staging.${local.domain_name}"
+    prod        = local.domain_name
+    thunderdome = "thunderdome.${local.domain_name}"
+  }
 }
 
 module "label" {
@@ -129,7 +135,7 @@ resource "aws_lb_listener" "https_redirect" {
 
 resource "aws_route53_record" "main" {
   zone_id = module.legacy.dns[local.domain_name].private.zone_id
-  name    = "${local.component}.${local.domain_name}."
+  name    = "${local.component}.${local.subdomain_names[local.env]}."
   type    = "CNAME"
   ttl     = 300
   records = [module.alb.alb_dns_name]
