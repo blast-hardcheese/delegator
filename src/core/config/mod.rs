@@ -8,6 +8,11 @@ use hashbrown::HashMap;
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct Virtualhosts {
+    pub catalog: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
 pub enum MethodName {
     #[serde(alias = "search")]
@@ -85,6 +90,7 @@ pub struct Configuration {
     pub http: HttpConfig,
     pub sentry: SentryConfig,
     pub services: Services,
+    pub virtualhosts: Virtualhosts,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, Error> {

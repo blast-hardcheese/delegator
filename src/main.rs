@@ -40,6 +40,7 @@ async fn main() -> Result<()> {
         http,
         sentry,
         mut services,
+        virtualhosts,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
 
     for (service_name, service) in services.iter_mut() {
@@ -84,7 +85,7 @@ async fn main() -> Result<()> {
             .wrap(Logger::default().log_target("accesslog"))
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
-            .configure(delegator_core::routes::configure)
+            .configure(|server| delegator_core::routes::configure(server, &virtualhosts))
     })
     .bind((http.host, http.port))?
     .run()
