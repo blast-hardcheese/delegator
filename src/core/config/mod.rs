@@ -80,11 +80,11 @@ pub struct ServiceLocation {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
+    pub authorities: HashMap<ServiceName, ServiceLocation>,
     pub environment: String,
     pub http: HttpConfig,
     pub sentry: SentryConfig,
     pub services: Services,
-    pub environments: HashMap<String, HashMap<ServiceName, ServiceLocation>>,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, Error> {

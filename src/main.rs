@@ -8,7 +8,6 @@ use delegator_core::config::{
 enum InitErrors {
     MissingConfigFile,
     ErrorLoadingConfig(hocon::Error),
-    ErrorLoadingRegistryEnvironment(String),
     ErrorLoadingRegistryService(String, String),
 }
 
@@ -20,10 +19,6 @@ impl From<InitErrors> for Error {
                 "First argument to the server must be a path to the config file",
             ),
             InitErrors::ErrorLoadingConfig(err) => Error::new(ErrorKind::Other, err.to_string()),
-            InitErrors::ErrorLoadingRegistryEnvironment(env) => Error::new(
-                ErrorKind::Other,
-                format!("Missing registry environment: {}", env),
-            ),
             InitErrors::ErrorLoadingRegistryService(env, service_name) => Error::new(
                 ErrorKind::Other,
                 format!("Missing registry service: {}:{}", env, service_name),
@@ -40,11 +35,11 @@ async fn main() -> Result<()> {
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
     let Configuration {
+        authorities,
         environment,
         http,
         sentry,
         mut services,
-        environments,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
 
     for (service_name, service) in services.iter_mut() {
@@ -56,9 +51,7 @@ async fn main() -> Result<()> {
         let ServiceLocation {
             scheme: new_scheme,
             authority: new_authority,
-        } = environments
-            .get(&environment)
-            .ok_or_else(|| InitErrors::ErrorLoadingRegistryEnvironment(environment.clone()))?
+        } = authorities
             .get(service_name)
             .ok_or_else(|| {
                 InitErrors::ErrorLoadingRegistryService(
