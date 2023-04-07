@@ -15,8 +15,8 @@ use serde_json::Value;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
-    translate::Language,
     translate::{self, parse::parse_language},
+    translate::{Language, StepError},
 };
 
 #[derive(Debug, Deserialize)]
@@ -36,7 +36,7 @@ pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
     InvalidStep(usize),
-    InvalidStructure,
+    InvalidStructure(StepError),
     InvalidTransition,
     NoStepsSpecified,
     UnknownMethod(MethodName),
@@ -102,7 +102,7 @@ fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, Evalu
         .ok_or(EvaluateError::InvalidTransition)?;
 
     let new_payload =
-        translate::step(prog.clone(), &response).map_err(|_e| EvaluateError::InvalidStructure)?;
+        translate::step(prog.clone(), &response).map_err(EvaluateError::InvalidStructure)?;
 
     state.insert(
         next_idx,

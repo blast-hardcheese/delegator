@@ -1,6 +1,8 @@
 pub mod deserialize;
 pub mod parse;
 
+use std::fmt::Display;
+
 use serde_json::{Map, Value};
 
 // translate
@@ -18,6 +20,12 @@ pub enum Language {
 #[derive(Debug)]
 pub struct StepError {
     history: Vec<String>,
+}
+
+impl Display for StepError {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(fmt, "StepError({})", self.history.join(", "))
+    }
 }
 
 pub fn step(prog: Language, current: &Value) -> Result<Value, StepError> {
