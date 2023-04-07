@@ -66,10 +66,30 @@ fn parse_object(input: &str) -> IResult<&str, Language> {
     )(input)
 }
 
+fn parse_get(input: &str) -> IResult<&str, Language> {
+    let (input, key) = delimited(
+        delimited(space0, tag("get(\""), space0),
+        identifier,
+        tag("\")"),
+    )(input)?;
+    Ok((input, Language::Get(String::from(key))))
+}
+
+fn parse_set(input: &str) -> IResult<&str, Language> {
+    let (input, key) = delimited(
+        delimited(space0, tag("set(\""), space0),
+        identifier,
+        tag("\")"),
+    )(input)?;
+    Ok((input, Language::Set(String::from(key))))
+}
+
 fn parse_thunk(input: &str) -> IResult<&str, Language> {
     parse_at(input)
         .or_else(|_| parse_map(input))
         .or_else(|_| parse_object(input))
+        .or_else(|_| parse_get(input))
+        .or_else(|_| parse_set(input))
 }
 
 pub fn parse_language(input: &str) -> IResult<&str, Language> {
