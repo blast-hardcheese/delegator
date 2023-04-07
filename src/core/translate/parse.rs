@@ -77,10 +77,9 @@ pub fn parse_language(input: &str) -> IResult<&str, Language> {
 
 #[test]
 fn test_parse_at() {
-    if let Ok((input, Language::At(name))) = parse_at(".foo") {
-        assert_eq!(input, "");
-        assert_eq!(name, "foo");
-    }
+    let (input, lang) = parse_at(".foo").unwrap();
+    assert_eq!(input, "");
+    assert_eq!(lang, Language::At(String::from("foo")));
 }
 
 #[test]
@@ -90,18 +89,16 @@ fn test_parse_focus() {
         String::from("foo"),
         Box::new(Language::At(String::from("bar"))),
     );
-    if let Ok((input, result)) = parse_at(prog) {
-        assert_eq!(input, "");
-        assert_eq!(result, expected);
-    }
+    let (input, result) = parse_at(prog).unwrap();
+    assert_eq!(input, "");
+    assert_eq!(result, expected);
 }
 
 #[test]
 fn test_parse_map() {
-    if let Ok((input, Language::At(name))) = parse_language(".foo") {
-        assert_eq!(input, "");
-        assert_eq!(name, "foo");
-    }
+    let (input, lang) = parse_language(".foo").unwrap();
+    assert_eq!(input, "");
+    assert_eq!(lang, Language::At(String::from("foo")));
 }
 
 #[test]
@@ -115,8 +112,7 @@ fn test_parse_object() {
         (String::from("bar"), Language::At(String::from("bar"))),
     ];
 
-    if let Ok((input, Language::Object(entries))) = parse_language(prog) {
-        assert_eq!(input, "");
-        assert_eq!(entries, expected);
-    }
+    let (input, lang) = parse_language(prog).unwrap();
+    assert_eq!(input, "");
+    assert_eq!(lang, Language::Object(expected));
 }
