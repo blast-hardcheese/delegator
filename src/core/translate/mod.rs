@@ -1,6 +1,7 @@
 pub mod deserialize;
 pub mod parse;
 
+use std::borrow::{Borrow, BorrowMut};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
@@ -18,6 +19,8 @@ pub enum Language {
     Array(Box<Language>),            // map( ... )
     Object(Vec<(String, Language)>), // { foo: .foo, bar: .bar  }
     Splat(Vec<Language>),            // .foo, .bar
+    Set(String),                     // ... | set("foo")
+    Get(String),                     // get("bar") | ...
 }
 
 #[derive(Debug)]
@@ -88,6 +91,22 @@ pub fn step(prog: Language, current: &Value, state: State) -> Result<Value, Step
                 .map(|next| step(next, current, state.clone()))
                 .collect::<Result<Vec<Value>, StepError>>()?;
             Ok(result.last().unwrap().clone())
+        }
+        Language::Set(into) => {
+            state
+                .lock()
+                .map_err(|_e| StepError { history: vec![ format!("Set({})", into) ] })?
+                .borrow_mut()
+                .insert(into.clone(), Arc::new(current.clone()));
+            Ok(current.clone())
+        }
+        Language::Get(from) => {
+            let mutex = state.lock().map_err(|_e| StepError { history: vec![ String::from("<Unable to acquire mutex lock>") ] })?;
+            let _state = mutex.borrow();
+            let needle = _state
+                .get(&from)
+                .ok_or_else(|| StepError { history: vec![ format!("Get({})", from) ] })?;
+            Ok((**needle).clone())
         }
     }
 }

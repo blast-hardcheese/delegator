@@ -122,3 +122,22 @@ fn test_parse_object() {
     assert_eq!(input, "");
     assert_eq!(lang, Language::Object(expected));
 }
+
+#[test]
+fn test_parse_set_get() {
+    let prog = r#".foo | set("foo"), { "bar": .bar, "foo": get("foo") }"#;
+    let expected = Language::Splat(vec![
+        Language::Focus(
+            String::from("foo"),
+            Box::new(Language::Set(String::from("foo"))),
+        ),
+        Language::Object(vec![
+            (String::from("bar"), Language::At(String::from("bar"))),
+            (String::from("foo"), Language::Get(String::from("foo"))),
+        ]),
+    ]);
+
+    let (input, entries) = parse_language(prog).unwrap();
+    assert_eq!(input, "");
+    assert_eq!(entries, expected);
+}
