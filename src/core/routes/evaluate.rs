@@ -16,7 +16,7 @@ use serde_json::Value;
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
     translate::{self, parse::parse_language},
-    translate::{Language, StepError},
+    translate::{make_state, Language, StepError},
 };
 
 #[derive(Debug, Deserialize)]
@@ -57,7 +57,13 @@ async fn evaluate(
         client_config: client_config.get_ref().clone(),
     };
 
-    let result = do_evaluate(cryptogram.into_inner(), live_client, services.get_ref()).await?;
+    let result = do_evaluate(
+        cryptogram.into_inner(),
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -86,11 +92,16 @@ static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::ne
     ])
 });
 
-fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, EvaluateError> {
+fn post(
+    step: &usize,
+    state: &mut State,
+    response: &Value,
+    translator_state: translate::State,
+) -> Result<Value, EvaluateError> {
     let last = &state[step];
     let next_idx = step + 1;
     if !state.contains_key(&next_idx) {
-        return Ok(response);
+        return Ok(response.clone());
     }
     let next = &state[&next_idx];
 
@@ -101,8 +112,8 @@ fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, Evalu
         ))
         .ok_or(EvaluateError::InvalidTransition)?;
 
-    let new_payload =
-        translate::step(prog.clone(), &response).map_err(EvaluateError::InvalidStructure)?;
+    let new_payload = translate::step(prog.clone(), response, translator_state)
+        .map_err(EvaluateError::InvalidStructure)?;
 
     state.insert(
         next_idx,
@@ -172,6 +183,7 @@ pub async fn do_evaluate<JC: JsonClient>(
     cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
+    translator_state: translate::State,
 ) -> Result<Value, EvaluateError> {
     let mut final_result: Option<Value> = None;
 
@@ -206,7 +218,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
                     .await?;
-                Some(post(&step, &mut state, result)?)
+                Some(post(&step, &mut state, &result, translator_state.clone())?)
             }
         };
         step += 1;
@@ -270,7 +282,7 @@ async fn routes_evaluate() {
         },
     );
 
-    match do_evaluate(cryptogram, TestJsonClient, &services).await {
+    match do_evaluate(cryptogram, TestJsonClient, &services, make_state()).await {
         Ok(value) => assert_eq!(
             value,
             json!({ "ids": ["12313bb7-6068-4ec9-ac49-3e834181f127"] })

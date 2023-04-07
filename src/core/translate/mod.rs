@@ -2,7 +2,9 @@ pub mod deserialize;
 pub mod parse;
 
 use std::fmt::Display;
+use std::sync::{Arc, Mutex};
 
+use hashbrown::HashMap;
 use serde_json::{Map, Value};
 
 // translate
@@ -29,7 +31,13 @@ impl Display for StepError {
     }
 }
 
-pub fn step(prog: Language, current: &Value) -> Result<Value, StepError> {
+pub type State = Arc<Mutex<HashMap<String, Arc<Value>>>>;
+
+pub fn make_state() -> State {
+    Arc::new(Mutex::new(HashMap::new()))
+}
+
+pub fn step(prog: Language, current: &Value, state: State) -> Result<Value, StepError> {
     match prog {
         Language::At(key) => Ok(current
             .get(&key)
@@ -40,6 +48,7 @@ pub fn step(prog: Language, current: &Value) -> Result<Value, StepError> {
             current.get(&key).ok_or_else(|| StepError {
                 history: vec![key.clone()],
             })?,
+            state,
         )
         .map_err(|StepError { mut history }| StepError {
             history: {
@@ -56,11 +65,13 @@ pub fn step(prog: Language, current: &Value) -> Result<Value, StepError> {
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
-                    step(*next.clone(), x).map_err(|StepError { mut history }| StepError {
-                        history: {
-                            history.insert(0, format!("[{}]", i));
-                            history
-                        },
+                    step(*next.clone(), x, state.clone()).map_err(|StepError { mut history }| {
+                        StepError {
+                            history: {
+                                history.insert(0, format!("[{}]", i));
+                                history
+                            },
+                        }
                     })
                 })
                 .collect::<Result<Vec<Value>, StepError>>()?,
@@ -68,13 +79,13 @@ pub fn step(prog: Language, current: &Value) -> Result<Value, StepError> {
         Language::Object(pairs) => Ok(Value::Object(
             pairs
                 .into_iter()
-                .map(|(k, v)| step(v, current).map(|v| (k, v)))
+                .map(|(k, v)| step(v, current, state.clone()).map(|v| (k, v)))
                 .collect::<Result<Map<String, Value>, StepError>>()?,
         )),
         Language::Splat(each) => {
             let result = each
                 .into_iter()
-                .map(|next| step(next, current))
+                .map(|next| step(next, current, state.clone()))
                 .collect::<Result<Vec<Value>, StepError>>()?;
             Ok(result.last().unwrap().clone())
         }
@@ -87,7 +98,7 @@ fn translate_error_at() {
     let prog = Language::At(String::from("foo"));
 
     let given = json!({ "bar": "baz" });
-    if let Some(StepError { history }) = step(prog, &given).err() {
+    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -98,7 +109,7 @@ fn translate_error_array() {
     let prog = Language::Array(Box::new(Language::At(String::from("foo"))));
 
     let given = json!([{ "bar": "baz" }]);
-    if let Some(StepError { history }) = step(prog, &given).err() {
+    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
         assert_eq!(history, vec!["[0]", "foo"]);
     }
 }
@@ -112,7 +123,7 @@ fn translate_error_focus() {
     );
 
     let given = json!({ "baz": "blix" });
-    if let Some(StepError { history }) = step(prog, &given).err() {
+    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -126,7 +137,7 @@ fn translate_error_object() {
     ]);
 
     let given = json!({ "foo": "foo" });
-    if let Some(StepError { history }) = step(prog, &given).err() {
+    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
         assert_eq!(history, vec!["bar"]);
     }
 }
@@ -145,5 +156,5 @@ fn translate_test() {
     let given = json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] });
     let expected = json!({ "ids": [ "12313bb7-6068-4ec9-ac49-3e834181f127" ] });
 
-    assert_eq!(step(prog, &given).unwrap(), expected);
+    assert_eq!(step(prog, &given, make_state()).unwrap(), expected);
 }
