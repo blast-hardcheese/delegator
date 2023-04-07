@@ -25,10 +25,7 @@ fn quoted(input: &str) -> IResult<&str, &str> {
 
 fn parse_at(input: &str) -> IResult<&str, Language> {
     let mut leader = preceded(char('.'), identifier);
-    let mut focus = opt(preceded(
-        delimited(space0, char('|'), space0),
-        parse_language,
-    ));
+    let mut focus = opt(preceded(delimited(space0, char('|'), space0), parse_thunk));
 
     let (input, key) = leader(input)?;
     let (input, proj) = focus(input)?;
@@ -46,7 +43,7 @@ fn parse_map(input: &str) -> IResult<&str, Language> {
         tag("map("),
         delimited(
             space0,
-            Parser::map(Parser::map(parse_language, Box::new), Language::Array),
+            Parser::map(Parser::map(parse_thunk, Box::new), Language::Array),
             space0,
         ),
         char(')'),
@@ -56,7 +53,7 @@ fn parse_map(input: &str) -> IResult<&str, Language> {
 fn parse_object(input: &str) -> IResult<&str, Language> {
     let parse_entry = pair(
         Parser::map(quoted, String::from),
-        preceded(delimited(space0, char(':'), space0), parse_language),
+        preceded(delimited(space0, char(':'), space0), parse_thunk),
     );
 
     delimited(
@@ -69,10 +66,14 @@ fn parse_object(input: &str) -> IResult<&str, Language> {
     )(input)
 }
 
-pub fn parse_language(input: &str) -> IResult<&str, Language> {
+fn parse_thunk(input: &str) -> IResult<&str, Language> {
     parse_at(input)
         .or_else(|_| parse_map(input))
         .or_else(|_| parse_object(input))
+}
+
+pub fn parse_language(input: &str) -> IResult<&str, Language> {
+    parse_thunk(input)
 }
 
 #[test]
