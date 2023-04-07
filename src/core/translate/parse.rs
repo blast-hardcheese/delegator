@@ -4,7 +4,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
 use nom::character::complete::{alpha1, alphanumeric1, char, one_of, space0};
 use nom::combinator::{opt, recognize};
-use nom::multi::{many0_count, separated_list0};
+use nom::multi::{many0_count, separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, preceded};
 use nom::{IResult, Parser};
 
@@ -73,7 +73,12 @@ fn parse_thunk(input: &str) -> IResult<&str, Language> {
 }
 
 pub fn parse_language(input: &str) -> IResult<&str, Language> {
-    parse_thunk(input)
+    let (input, matched) =
+        separated_list1(delimited(space0, tag(","), space0), parse_thunk)(input)?;
+    match matched.as_slice() {
+        [only] => Ok((input, only.clone())),
+        rest => Ok((input, Language::Splat(rest.to_vec()))),
+    }
 }
 
 #[test]
