@@ -64,15 +64,26 @@ async fn evaluate(
 type MethodSpec = (ServiceName, MethodName);
 
 static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::new(|| {
-    HashMap::from_iter(vec![(
+    HashMap::from_iter(vec![
         (
-            (ServiceName::Catalog, MethodName::Search),
-            (ServiceName::Catalog, MethodName::Lookup),
+            (
+                (ServiceName::Catalog, MethodName::Search),
+                (ServiceName::Catalog, MethodName::Lookup),
+            ),
+            parse_language(r#".results | { "ids": map(.product_variant_id) }"#)
+                .unwrap()
+                .1,
         ),
-        parse_language(r#".results | { "ids": map(.product_variant_id) }"#)
-            .unwrap()
-            .1,
-    )])
+        (
+            (
+                (ServiceName::Catalog, MethodName::Explore),
+                (ServiceName::Catalog, MethodName::Lookup),
+            ),
+            parse_language(r#"{ "ids": .product_variant_ids }"#)
+                .unwrap()
+                .1,
+        ),
+    ])
 });
 
 fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, EvaluateError> {

@@ -15,6 +15,8 @@ pub struct Virtualhosts {
 
 #[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
 pub enum MethodName {
+    #[serde(alias = "explore")]
+    Explore,
     #[serde(alias = "search")]
     Search,
     #[serde(alias = "lookup")]
