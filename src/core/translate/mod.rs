@@ -15,6 +15,7 @@ pub enum Language {
     Focus(String, Box<Language>),    // .foo | ...
     Array(Box<Language>),            // map( ... )
     Object(Vec<(String, Language)>), // { foo: .foo, bar: .bar  }
+    Splat(Vec<Language>),            // .foo, .bar
 }
 
 #[derive(Debug)]
@@ -70,6 +71,13 @@ pub fn step(prog: Language, current: &Value) -> Result<Value, StepError> {
                 .map(|(k, v)| step(v, current).map(|v| (k, v)))
                 .collect::<Result<Map<String, Value>, StepError>>()?,
         )),
+        Language::Splat(each) => {
+            let result = each
+                .into_iter()
+                .map(|next| step(next, current))
+                .collect::<Result<Vec<Value>, StepError>>()?;
+            Ok(result.last().unwrap().clone())
+        }
     }
 }
 
