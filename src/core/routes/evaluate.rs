@@ -21,18 +21,18 @@ use crate::{
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    service: ServiceName,
-    method: MethodName,
-    payload: Value,
+    pub service: ServiceName,
+    pub method: MethodName,
+    pub payload: Value,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogram {
-    steps: Vec<JsonCryptogramStep>,
+    pub steps: Vec<JsonCryptogramStep>,
 }
 
 #[derive(Debug, Display)]
-enum EvaluateError {
+pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
     InvalidStep(usize),
@@ -106,7 +106,7 @@ fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, Evalu
 }
 
 #[async_trait(?Send)]
-trait JsonClient {
+pub trait JsonClient {
     async fn issue_request(
         &self,
         method: Method,
@@ -115,9 +115,9 @@ trait JsonClient {
     ) -> Result<Value, EvaluateError>;
 }
 
-struct LiveJsonClient {
-    client: awc::Client,
-    client_config: HttpClientConfig,
+pub struct LiveJsonClient {
+    pub client: awc::Client,
+    pub client_config: HttpClientConfig,
 }
 
 #[async_trait(?Send)]
@@ -157,7 +157,7 @@ impl JsonClient for TestJsonClient {
 
 type State = HashMap<usize, JsonCryptogramStep>;
 
-async fn do_evaluate<JC: JsonClient>(
+pub async fn do_evaluate<JC: JsonClient>(
     cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
