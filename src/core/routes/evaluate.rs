@@ -24,6 +24,7 @@ pub struct JsonCryptogramStep {
     pub service: ServiceName,
     pub method: MethodName,
     pub payload: Value,
+    pub postflight: Language,
 }
 
 #[derive(Debug, Deserialize)]
@@ -232,11 +233,17 @@ async fn routes_evaluate() {
                 service: ServiceName::Catalog,
                 method: MethodName::Search,
                 payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
+                postflight: Language::Focus(String::from("results"), Box::new(Language::Object(vec![
+                    (String::from("ids"), Language::Array(Box::new(Language::At(String::from("product_variant_id"))))),
+                ]))),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
+                postflight: Language::Object(vec![
+                    (String::from("results"), Language::At(String::from("results"))),
+                ]),
             },
         ],
     };

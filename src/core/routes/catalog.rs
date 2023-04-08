@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::make_state,
+    translate::{make_state, Language},
 };
 
 use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
@@ -68,11 +68,21 @@ async fn get_explore(
                 service: ServiceName::Catalog,
                 method: MethodName::Explore,
                 payload: json!({ "q": req.q, "page": page, "bucket_info": bucket_info, "size": size }),
+                postflight: Language::Splat(vec![
+                    Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
+                    Language::Object(vec![
+                        (String::from("ids"), Language::At(String::from("product_variant_ids"))),
+                    ])
+                ]),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
+                postflight: Language::Object(vec![
+                    (String::from("results"), Language::At(String::from("results"))),
+                    (String::from("next_start"), Language::Get(String::from("next_start"))),
+                ]),
             },
         ],
     };
