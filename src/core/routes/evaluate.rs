@@ -116,8 +116,6 @@ impl JsonClient for TestJsonClient {
     }
 }
 
-type State = HashMap<usize, JsonCryptogramStep>;
-
 pub async fn do_evaluate<JC: JsonClient>(
     cryptogram: JsonCryptogram,
     json_client: JC,
@@ -126,7 +124,7 @@ pub async fn do_evaluate<JC: JsonClient>(
 ) -> Result<Value, EvaluateError> {
     let mut final_result: Option<Value> = None;
 
-    let mut state: State = cryptogram.steps.into_iter().enumerate().collect();
+    let mut state: HashMap<usize, JsonCryptogramStep> = cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
     while step < state.len() {
         let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
