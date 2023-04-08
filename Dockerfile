@@ -34,4 +34,4 @@ COPY config ./config
 EXPOSE 80/tcp
 ENV RUST_BACKTRACE=1
 
-CMD [ "./bin/delegator", "config/application.conf" ]
+CMD [ "sh", "-c", "exec ./bin/delegator \"config/$ENVIRONMENT.conf\"" ]
