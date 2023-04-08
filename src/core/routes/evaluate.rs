@@ -9,14 +9,12 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
-    translate::{self, parse::parse_language},
-    translate::{make_state, Language, StepError},
+    translate::{self, make_state, Language, StepError},
 };
 
 #[derive(Debug, Deserialize)]
@@ -67,31 +65,6 @@ async fn evaluate(
     .await?;
     Ok(HttpResponse::Ok().json(&result))
 }
-
-type MethodSpec = (ServiceName, MethodName);
-
-static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::new(|| {
-    HashMap::from_iter(vec![
-        (
-            (
-                (ServiceName::Catalog, MethodName::Search),
-                (ServiceName::Catalog, MethodName::Lookup),
-            ),
-            parse_language(r#".results | { "ids": map(.product_variant_id) }"#)
-                .unwrap()
-                .1,
-        ),
-        (
-            (
-                (ServiceName::Catalog, MethodName::Explore),
-                (ServiceName::Catalog, MethodName::Lookup),
-            ),
-            parse_language(r#".next_start | set("next_start"), { "ids": .product_variant_ids }"#)
-                .unwrap()
-                .1,
-        ),
-    ])
-});
 
 #[async_trait(?Send)]
 pub trait JsonClient {
@@ -160,6 +133,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
+        let postflight = &current_step.postflight;
 
         let service = services
             .get(service_name)
@@ -186,22 +160,13 @@ pub async fn do_evaluate<JC: JsonClient>(
                     .issue_request(Method::POST, uri, payload)
                     .await?;
 
-                let last = &state[&step];
+                let new_payload = translate::step(postflight, &result, translator_state.clone())
+                    .map_err(EvaluateError::InvalidStructure)?;
+
                 let next_idx = step + 1;
                 if !state.contains_key(&next_idx) {
-                    return Ok(result);
+                    return Ok(new_payload);
                 }
-                let next = &state[&next_idx];
-
-                let prog = TRANSITIONS
-                    .get(&(
-                        (last.service.clone(), last.method.clone()),
-                        (next.service.clone(), next.method.clone()),
-                    ))
-                    .ok_or(EvaluateError::InvalidTransition)?;
-
-                let new_payload = translate::step(prog, &result, translator_state.clone())
-                    .map_err(EvaluateError::InvalidStructure)?;
 
                 let mut next = state.remove(&next_idx).ok_or_else(|| EvaluateError::InvalidTransition)?;
                 next.payload = new_payload.clone();
