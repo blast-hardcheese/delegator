@@ -92,41 +92,6 @@ static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::ne
     ])
 });
 
-fn post(
-    step: &usize,
-    state: &mut State,
-    response: &Value,
-    translator_state: translate::State,
-) -> Result<Value, EvaluateError> {
-    let last = &state[step];
-    let next_idx = step + 1;
-    if !state.contains_key(&next_idx) {
-        return Ok(response.clone());
-    }
-    let next = &state[&next_idx];
-
-    let prog = TRANSITIONS
-        .get(&(
-            (last.service.clone(), last.method.clone()),
-            (next.service.clone(), next.method.clone()),
-        ))
-        .ok_or(EvaluateError::InvalidTransition)?;
-
-    let new_payload = translate::step(prog, response, translator_state)
-        .map_err(EvaluateError::InvalidStructure)?;
-
-    state.insert(
-        next_idx,
-        JsonCryptogramStep {
-            service: next.service.clone(),
-            method: next.method.clone(),
-            payload: new_payload.clone(),
-        },
-    );
-
-    Ok(new_payload)
-}
-
 #[async_trait(?Send)]
 pub trait JsonClient {
     async fn issue_request(
@@ -218,7 +183,34 @@ pub async fn do_evaluate<JC: JsonClient>(
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
                     .await?;
-                Some(post(&step, &mut state, &result, translator_state.clone())?)
+
+                let last = &state[&step];
+                let next_idx = step + 1;
+                if !state.contains_key(&next_idx) {
+                    return Ok(result);
+                }
+                let next = &state[&next_idx];
+
+                let prog = TRANSITIONS
+                    .get(&(
+                        (last.service.clone(), last.method.clone()),
+                        (next.service.clone(), next.method.clone()),
+                    ))
+                    .ok_or(EvaluateError::InvalidTransition)?;
+
+                let new_payload = translate::step(prog, &result, translator_state.clone())
+                    .map_err(EvaluateError::InvalidStructure)?;
+
+                state.insert(
+                    next_idx,
+                    JsonCryptogramStep {
+                        service: next.service.clone(),
+                        method: next.method.clone(),
+                        payload: new_payload.clone(),
+                    },
+                );
+
+                Some(new_payload)
             }
         };
         step += 1;
