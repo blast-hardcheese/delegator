@@ -158,6 +158,8 @@ pub async fn do_evaluate<JC: JsonClient>(
         let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
         let service_name = &current_step.service;
         let method_name = &current_step.method;
+        let payload = &current_step.payload;
+
         let service = services
             .get(service_name)
             .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
@@ -179,7 +181,6 @@ pub async fn do_evaluate<JC: JsonClient>(
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
 
-                let payload = &current_step.payload;
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
                     .await?;
@@ -201,13 +202,11 @@ pub async fn do_evaluate<JC: JsonClient>(
                 let new_payload = translate::step(prog, &result, translator_state.clone())
                     .map_err(EvaluateError::InvalidStructure)?;
 
+                let mut next = state.remove(&next_idx).ok_or_else(|| EvaluateError::InvalidTransition)?;
+                next.payload = new_payload.clone();
                 state.insert(
                     next_idx,
-                    JsonCryptogramStep {
-                        service: next.service.clone(),
-                        method: next.method.clone(),
-                        payload: new_payload.clone(),
-                    },
+                    next,
                 );
 
                 Some(new_payload)
