@@ -112,7 +112,7 @@ fn post(
         ))
         .ok_or(EvaluateError::InvalidTransition)?;
 
-    let new_payload = translate::step(prog.clone(), response, translator_state)
+    let new_payload = translate::step(prog, response, translator_state)
         .map_err(EvaluateError::InvalidStructure)?;
 
     state.insert(

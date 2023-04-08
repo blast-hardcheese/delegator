@@ -40,22 +40,22 @@ pub fn make_state() -> State {
     Arc::new(Mutex::new(HashMap::new()))
 }
 
-pub fn step(prog: Language, current: &Value, state: State) -> Result<Value, StepError> {
+pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, StepError> {
     match prog {
         Language::At(key) => Ok(current
-            .get(&key)
-            .ok_or_else(|| StepError { history: vec![key] })?
+            .get(key)
+            .ok_or_else(|| StepError { history: vec![key.clone()] })?
             .clone()),
         Language::Focus(key, next) => step(
-            *next,
-            current.get(&key).ok_or_else(|| StepError {
+            next,
+            current.get(key).ok_or_else(|| StepError {
                 history: vec![key.clone()],
             })?,
             state,
         )
         .map_err(|StepError { mut history }| StepError {
             history: {
-                history.insert(0, key);
+                history.insert(0, key.clone());
                 history
             },
         }),
@@ -68,7 +68,7 @@ pub fn step(prog: Language, current: &Value, state: State) -> Result<Value, Step
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
-                    step(*next.clone(), x, state.clone()).map_err(|StepError { mut history }| {
+                    step(next, x, state.clone()).map_err(|StepError { mut history }| {
                         StepError {
                             history: {
                                 history.insert(0, format!("[{}]", i));
@@ -81,13 +81,13 @@ pub fn step(prog: Language, current: &Value, state: State) -> Result<Value, Step
         )),
         Language::Object(pairs) => Ok(Value::Object(
             pairs
-                .into_iter()
-                .map(|(k, v)| step(v, current, state.clone()).map(|v| (k, v)))
+                .iter()
+                .map(|(k, v)| step(v, current, state.clone()).map(|v| (k.clone(), v)))
                 .collect::<Result<Map<String, Value>, StepError>>()?,
         )),
         Language::Splat(each) => {
             let result = each
-                .into_iter()
+                .iter()
                 .map(|next| step(next, current, state.clone()))
                 .collect::<Result<Vec<Value>, StepError>>()?;
             Ok(result.last().unwrap().clone())
@@ -104,7 +104,7 @@ pub fn step(prog: Language, current: &Value, state: State) -> Result<Value, Step
             let mutex = state.lock().map_err(|_e| StepError { history: vec![ String::from("<Unable to acquire mutex lock>") ] })?;
             let _state = mutex.borrow();
             let needle = _state
-                .get(&from)
+                .get(from)
                 .ok_or_else(|| StepError { history: vec![ format!("Get({})", from) ] })?;
             Ok((**needle).clone())
         }
@@ -117,7 +117,7 @@ fn translate_error_at() {
     let prog = Language::At(String::from("foo"));
 
     let given = json!({ "bar": "baz" });
-    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
+    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -128,7 +128,7 @@ fn translate_error_array() {
     let prog = Language::Array(Box::new(Language::At(String::from("foo"))));
 
     let given = json!([{ "bar": "baz" }]);
-    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
+    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
         assert_eq!(history, vec!["[0]", "foo"]);
     }
 }
@@ -142,7 +142,7 @@ fn translate_error_focus() {
     );
 
     let given = json!({ "baz": "blix" });
-    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
+    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -156,7 +156,7 @@ fn translate_error_object() {
     ]);
 
     let given = json!({ "foo": "foo" });
-    if let Some(StepError { history }) = step(prog, &given, make_state()).err() {
+    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
         assert_eq!(history, vec!["bar"]);
     }
 }
@@ -175,5 +175,5 @@ fn translate_test() {
     let given = json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] });
     let expected = json!({ "ids": [ "12313bb7-6068-4ec9-ac49-3e834181f127" ] });
 
-    assert_eq!(step(prog, &given, make_state()).unwrap(), expected);
+    assert_eq!(step(&prog, &given, make_state()).unwrap(), expected);
 }
