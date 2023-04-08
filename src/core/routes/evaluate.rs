@@ -85,7 +85,7 @@ static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::ne
                 (ServiceName::Catalog, MethodName::Explore),
                 (ServiceName::Catalog, MethodName::Lookup),
             ),
-            parse_language(r#"{ "ids": .product_variant_ids }"#)
+            parse_language(r#".next_start | set("next_start"), { "ids": .product_variant_ids }"#)
                 .unwrap()
                 .1,
         ),
