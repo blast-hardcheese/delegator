@@ -498,6 +498,7 @@ dependencies = [
  "hashbrown 0.13.2",
  "hocon",
  "http-serde",
+ "log",
  "nom 7.1.3",
  "once_cell",
  "sentry",
@@ -1117,6 +1118,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if",
+ "serde",
 ]
 
 [[package]]

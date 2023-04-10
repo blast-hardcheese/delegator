@@ -8,8 +8,15 @@ use hashbrown::HashMap;
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct Virtualhosts {
+    pub catalog: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
 pub enum MethodName {
+    #[serde(alias = "explore")]
+    Explore,
     #[serde(alias = "search")]
     Search,
     #[serde(alias = "lookup")]
@@ -80,11 +87,12 @@ pub struct ServiceLocation {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
+    pub authorities: HashMap<ServiceName, ServiceLocation>,
     pub environment: String,
     pub http: HttpConfig,
     pub sentry: SentryConfig,
     pub services: Services,
-    pub environments: HashMap<String, HashMap<ServiceName, ServiceLocation>>,
+    pub virtualhosts: Virtualhosts,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, Error> {

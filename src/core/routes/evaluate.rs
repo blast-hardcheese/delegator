@@ -9,34 +9,33 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
 use hashbrown::HashMap;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
-    translate::Language,
-    translate::{self, parse::parse_language},
+    translate::{self, make_state, Language, StepError},
 };
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    service: ServiceName,
-    method: MethodName,
-    payload: Value,
+    pub service: ServiceName,
+    pub method: MethodName,
+    pub payload: Value,
+    pub postflight: Language,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogram {
-    steps: Vec<JsonCryptogramStep>,
+    pub steps: Vec<JsonCryptogramStep>,
 }
 
 #[derive(Debug, Display)]
-enum EvaluateError {
+pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
     InvalidStep(usize),
-    InvalidStructure,
+    InvalidStructure(StepError),
     InvalidTransition,
     NoStepsSpecified,
     UnknownMethod(MethodName),
@@ -57,56 +56,18 @@ async fn evaluate(
         client_config: client_config.get_ref().clone(),
     };
 
-    let result = do_evaluate(cryptogram.into_inner(), live_client, services.get_ref()).await?;
+    let result = do_evaluate(
+        cryptogram.into_inner(),
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
-type MethodSpec = (ServiceName, MethodName);
-
-static TRANSITIONS: Lazy<HashMap<(MethodSpec, MethodSpec), Language>> = Lazy::new(|| {
-    HashMap::from_iter(vec![(
-        (
-            (ServiceName::Catalog, MethodName::Search),
-            (ServiceName::Catalog, MethodName::Lookup),
-        ),
-        parse_language(r#".results | { "ids": map(.product_variant_id) }"#)
-            .unwrap()
-            .1,
-    )])
-});
-
-fn post(step: &usize, state: &mut State, response: Value) -> Result<Value, EvaluateError> {
-    let last = &state[step];
-    let next_idx = step + 1;
-    if !state.contains_key(&next_idx) {
-        return Ok(response);
-    }
-    let next = &state[&next_idx];
-
-    let prog = TRANSITIONS
-        .get(&(
-            (last.service.clone(), last.method.clone()),
-            (next.service.clone(), next.method.clone()),
-        ))
-        .ok_or(EvaluateError::InvalidTransition)?;
-
-    let new_payload =
-        translate::step(prog.clone(), &response).map_err(|_e| EvaluateError::InvalidStructure)?;
-
-    state.insert(
-        next_idx,
-        JsonCryptogramStep {
-            service: next.service.clone(),
-            method: next.method.clone(),
-            payload: new_payload.clone(),
-        },
-    );
-
-    Ok(new_payload)
-}
-
 #[async_trait(?Send)]
-trait JsonClient {
+pub trait JsonClient {
     async fn issue_request(
         &self,
         method: Method,
@@ -115,9 +76,9 @@ trait JsonClient {
     ) -> Result<Value, EvaluateError>;
 }
 
-struct LiveJsonClient {
-    client: awc::Client,
-    client_config: HttpClientConfig,
+pub struct LiveJsonClient {
+    pub client: awc::Client,
+    pub client_config: HttpClientConfig,
 }
 
 #[async_trait(?Send)]
@@ -155,21 +116,23 @@ impl JsonClient for TestJsonClient {
     }
 }
 
-type State = HashMap<usize, JsonCryptogramStep>;
-
-async fn do_evaluate<JC: JsonClient>(
+pub async fn do_evaluate<JC: JsonClient>(
     cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
+    translator_state: translate::State,
 ) -> Result<Value, EvaluateError> {
     let mut final_result: Option<Value> = None;
 
-    let mut state: State = cryptogram.steps.into_iter().enumerate().collect();
+    let mut state: HashMap<usize, JsonCryptogramStep> = cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
     while step < state.len() {
         let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
         let service_name = &current_step.service;
         let method_name = &current_step.method;
+        let payload = &current_step.payload;
+        let postflight = &current_step.postflight;
+
         let service = services
             .get(service_name)
             .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
@@ -191,11 +154,26 @@ async fn do_evaluate<JC: JsonClient>(
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
 
-                let payload = &current_step.payload;
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
                     .await?;
-                Some(post(&step, &mut state, result)?)
+
+                let new_payload = translate::step(postflight, &result, translator_state.clone())
+                    .map_err(EvaluateError::InvalidStructure)?;
+
+                let next_idx = step + 1;
+                if !state.contains_key(&next_idx) {
+                    return Ok(new_payload);
+                }
+
+                let mut next = state.remove(&next_idx).ok_or_else(|| EvaluateError::InvalidTransition)?;
+                next.payload = new_payload.clone();
+                state.insert(
+                    next_idx,
+                    next,
+                );
+
+                Some(new_payload)
             }
         };
         step += 1;
@@ -218,11 +196,17 @@ async fn routes_evaluate() {
                 service: ServiceName::Catalog,
                 method: MethodName::Search,
                 payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
+                postflight: Language::Focus(String::from("results"), Box::new(Language::Object(vec![
+                    (String::from("ids"), Language::Array(Box::new(Language::At(String::from("product_variant_id"))))),
+                ]))),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
+                postflight: Language::Object(vec![
+                    (String::from("results"), Language::At(String::from("results"))),
+                ]),
             },
         ],
     };
@@ -259,7 +243,7 @@ async fn routes_evaluate() {
         },
     );
 
-    match do_evaluate(cryptogram, TestJsonClient, &services).await {
+    match do_evaluate(cryptogram, TestJsonClient, &services, make_state()).await {
         Ok(value) => assert_eq!(
             value,
             json!({ "ids": ["12313bb7-6068-4ec9-ac49-3e834181f127"] })

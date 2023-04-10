@@ -37,7 +37,7 @@ env:
 jobs:
   docker-build-push:
     name: Build, push
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@f6262e0a7203de0449cd3d7ab55e2f310e41a633 # v0.3.2
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
     with:
       image_name: delegator
       push      : true
@@ -50,15 +50,15 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   call-deploy-to-env:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@72e9d028074d15065fc5830e34532a1b06a25df7 # v1.0.0
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
     needs:
       - docker-build-push
     with:
-      environment: ${{ inputs.environment || 'stag' }}
-      aws_region : ${{ inputs.aws_region || 'us-east-1' }}
-      image_tag  : ${{ needs.docker-build-push.outputs.tag }}
-      apply      : true
-      migrations : false
+      environment       : ${{ inputs.environment || 'stag' }}
+      aws_region        : ${{ inputs.aws_region || 'us-east-1' }}
+      image_tag         : ${{ needs.docker-build-push.outputs.tag }}
+      apply             : true
+      migrations        : false
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
