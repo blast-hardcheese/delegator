@@ -91,12 +91,16 @@ async fn get_explore(
             payload: json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             postflight: Language::Splat(vec![
                 Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
+                Language::Focus(String::from("has_more"), Box::new(Language::Set(String::from("has_more")))),
                 Language::Object(vec![
                     (String::from("ids"), Language::At(String::from("product_variant_ids"))),
                 ])
             ]),
         };
-        (source, vec![(String::from("next_start"), Language::Get(String::from("next_start")))])
+        (source, vec![
+            (String::from("next_start"), Language::Get(String::from("next_start"))),
+            (String::from("has_more"), Language::Get(String::from("has_more"))),
+        ])
     };
 
     let cryptogram = JsonCryptogram {
