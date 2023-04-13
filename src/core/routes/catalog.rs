@@ -42,30 +42,30 @@ async fn get_explore(
 
     let start = req.start.clone().unwrap_or(String::from("1"));
     let size = req.size.unwrap_or(10);
-    let (page, bucket_info) = match Vec::from_iter(start.splitn(3, ':')).as_slice() {
-        [legacy_page] => {
-            let _page = legacy_page
+    let (start, bucket_info) = match Vec::from_iter(start.splitn(3, ':')).as_slice() {
+        [legacy_start] => {
+            let _start = legacy_start
                 .to_owned()
                 .parse::<i32>()
                 .map_err(ExploreError::InvalidPage)?;
-            (_page - 1, None)
+            (_start - 1, None)
         }
-        ["catalog", page] => {
-            let _page = page
+        ["catalog", start] => {
+            let _start = start
                 .parse::<i32>()
                 .map_err(ExploreError::InvalidPage)?;
-            (_page, None)
+            (_start, None)
         }
-        ["catalog", page, bucket_info] => {
-            let _page = page
+        ["catalog", start, bucket_info] => {
+            let _start = start
                 .parse::<i32>()
                 .map_err(ExploreError::InvalidPage)?;
-            (_page, Some(bucket_info.to_owned()))
+            (_start, Some(bucket_info.to_owned()))
         }
         [..] => (0, None),
     };
 
-    let (source, next_start) = if page == 0 && features.recommendations {
+    let (source, next_start) = if start == 0 && features.recommendations {
         let source = JsonCryptogramStep {
             service: ServiceName::Recommendations,
             method: MethodName::Lookup,
@@ -74,17 +74,21 @@ async fn get_explore(
                 (String::from("ids"), Language::At(String::from("results"))),
             ])
         };
-        (source, vec![])
+        let next_start = format!("catalog:{}", size);
+        (source, vec![
+            (String::from("next_start"), Language::Const(json!(next_start))),
+            (String::from("has_more"), Language::Const(json!(true))),
+        ])
     } else {
-        let new_page = if features.recommendations {
-            page - 1  // Offset how many pages of recs we want if we are running recommendations
+        let new_start = if features.recommendations {
+            start - 1  // Offset how many recs we want if we are running recommendations
         } else {
-            page
+            start
         };
         let source = JsonCryptogramStep {
             service: ServiceName::Catalog,
             method: MethodName::Explore,
-            payload: json!({ "q": req.q, "page": new_page, "bucket_info": bucket_info, "size": size }),
+            payload: json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             postflight: Language::Splat(vec![
                 Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
                 Language::Object(vec![
