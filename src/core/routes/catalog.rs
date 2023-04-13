@@ -65,22 +65,23 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let source = if page == 0 && features.recommendations {
-        JsonCryptogramStep {
+    let (source, next_start) = if page == 0 && features.recommendations {
+        let source = JsonCryptogramStep {
             service: ServiceName::Recommendations,
             method: MethodName::Lookup,
             payload: json!({ "size": size }),
             postflight: Language::Object(vec![
                 (String::from("ids"), Language::At(String::from("results"))),
             ])
-        }
+        };
+        (source, vec![])
     } else {
         let new_page = if features.recommendations {
             page - 1  // Offset how many pages of recs we want if we are running recommendations
         } else {
             page
         };
-        JsonCryptogramStep {
+        let source = JsonCryptogramStep {
             service: ServiceName::Catalog,
             method: MethodName::Explore,
             payload: json!({ "q": req.q, "page": new_page, "bucket_info": bucket_info, "size": size }),
@@ -90,7 +91,8 @@ async fn get_explore(
                     (String::from("ids"), Language::At(String::from("product_variant_ids"))),
                 ])
             ]),
-        }
+        };
+        (source, vec![(String::from("next_start"), Language::Get(String::from("next_start")))])
     };
 
     let cryptogram = JsonCryptogram {
@@ -101,9 +103,9 @@ async fn get_explore(
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
                 postflight: Language::Object(vec![
-                    (String::from("results"), Language::At(String::from("results"))),
-                    (String::from("next_start"), Language::Get(String::from("next_start"))),
-                ]),
+                    vec![(String::from("results"), Language::At(String::from("results")))],
+                    next_start,
+                ].concat()),
             },
         ],
     };
