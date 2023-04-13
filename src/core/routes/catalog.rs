@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::{make_state, Language},
+    translate::{make_state, Language}, headers::features::Features,
 };
 
 use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
@@ -36,7 +36,10 @@ async fn get_explore(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     req: web::Query<ExploreRequest>,
+    features: Option<Features>,
 ) -> Result<HttpResponse, ExploreError> {
+    let features = features.unwrap_or(Features::empty());
+
     let start = req.start.clone().unwrap_or(String::from("1"));
     let size = req.size.unwrap_or(10);
     let (page, bucket_info) = match Vec::from_iter(start.splitn(3, ':')).as_slice() {
@@ -62,7 +65,7 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let source = if page == 0 {
+    let source = if page == 0 && features.recommendations {
         JsonCryptogramStep {
             service: ServiceName::Recommendations,
             method: MethodName::Lookup,
@@ -72,7 +75,11 @@ async fn get_explore(
             ])
         }
     } else {
-        let new_page = page - 1;  // Offset how many pages of recs we want
+        let new_page = if features.recommendations {
+            page - 1  // Offset how many pages of recs we want if we are running recommendations
+        } else {
+            page
+        };
         JsonCryptogramStep {
             service: ServiceName::Catalog,
             method: MethodName::Explore,
