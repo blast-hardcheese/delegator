@@ -62,19 +62,33 @@ async fn get_explore(
         [..] => (0, None),
     };
 
+    let source = if page == 0 {
+        JsonCryptogramStep {
+            service: ServiceName::Recommendations,
+            method: MethodName::Lookup,
+            payload: json!({ "size": size }),
+            postflight: Language::Object(vec![
+                (String::from("ids"), Language::At(String::from("results"))),
+            ])
+        }
+    } else {
+        let new_page = page - 1;  // Offset how many pages of recs we want
+        JsonCryptogramStep {
+            service: ServiceName::Catalog,
+            method: MethodName::Explore,
+            payload: json!({ "q": req.q, "page": new_page, "bucket_info": bucket_info, "size": size }),
+            postflight: Language::Splat(vec![
+                Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
+                Language::Object(vec![
+                    (String::from("ids"), Language::At(String::from("product_variant_ids"))),
+                ])
+            ]),
+        }
+    };
+
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Explore,
-                payload: json!({ "q": req.q, "page": page, "bucket_info": bucket_info, "size": size }),
-                postflight: Language::Splat(vec![
-                    Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
-                    Language::Object(vec![
-                        (String::from("ids"), Language::At(String::from("product_variant_ids"))),
-                    ])
-                ]),
-            },
+            source,
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
