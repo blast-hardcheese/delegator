@@ -21,6 +21,7 @@ pub enum Language {
     Splat(Vec<Language>),            // .foo, .bar
     Set(String),                     // ... | set("foo")
     Get(String),                     // get("bar") | ...
+    Const(Value),                    // const(...)
 }
 
 #[derive(Debug)]
@@ -107,6 +108,9 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
                 .get(from)
                 .ok_or_else(|| StepError { history: vec![ format!("Get({})", from) ] })?;
             Ok((**needle).clone())
+        },
+        Language::Const(value) => {
+            Ok(value.clone())
         }
     }
 }

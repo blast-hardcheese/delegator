@@ -74,7 +74,11 @@ async fn get_explore(
                 (String::from("ids"), Language::At(String::from("results"))),
             ])
         };
-        (source, vec![])
+        let next_start = format!("catalog:{}", size);
+        (source, vec![
+            (String::from("next_start"), Language::Const(json!(next_start))),
+            (String::from("has_more"), Language::Const(json!(true))),
+        ])
     } else {
         let new_start = if features.recommendations {
             start - 1  // Offset how many recs we want if we are running recommendations
