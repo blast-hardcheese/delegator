@@ -36,6 +36,7 @@ jobs:
       aws_region        : ${{ inputs.aws_region }}
       image_tag         : ${{ inputs.image_tag }}
       apply             : ${{ inputs.apply }}
+      migrations        : false
 
     secrets:
       AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
