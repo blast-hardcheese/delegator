@@ -21,7 +21,7 @@ locals {
 }
 
 module "label" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-resource-label?ref=v0.1.0"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-resource-label?ref=v1.1.0"
 
   namespace   = local.namespace
   product     = local.product
@@ -44,34 +44,18 @@ data "aws_acm_certificate" "ssl_cert" {
   most_recent = true
 }
 
-module "alb" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb?ref=v0.2.1"
+#-------------------------------------------------------------------
+# Security Group 
+#-------------------------------------------------------------------
 
-  context = module.label.context
-
+resource "aws_security_group" "main" {
+  name        = "${module.label.id}-alb-sg"
+  description = "Security group for ALB"
   vpc_id      = module.legacy.vpcs[local.env].id
-  subnet_ids  = module.legacy.vpcs[local.env].subnets.private
-  is_internal = true
-}
 
-resource "aws_security_group_rule" "ingress_http" {
-  type              = "ingress"
-  from_port         = 80
-  to_port           = 80
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "allow HTTP connections"
-  security_group_id = module.alb.alb_sg_id
-}
-
-resource "aws_security_group_rule" "ingress_https" {
-  type              = "ingress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "allow HTTPS connections"
-  security_group_id = module.alb.alb_sg_id
+  tags = merge(module.label.tags, {
+    "Name" = "${module.label.id}-alb-sg"
+  })
 }
 
 resource "aws_security_group_rule" "egress" {
@@ -81,11 +65,54 @@ resource "aws_security_group_rule" "egress" {
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
   description       = "allow egress everywhere"
-  security_group_id = module.alb.alb_sg_id
+  security_group_id = aws_security_group.main.id
 }
 
-resource "aws_lb_target_group" "default" {
-  name         = "${module.label.id}-tg-default"
+resource "aws_security_group_rule" "ingress_http" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "allow HTTP connections"
+  security_group_id = aws_security_group.main.id
+}
+
+resource "aws_security_group_rule" "ingress_https" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "allow HTTPS connections"
+  security_group_id = aws_security_group.main.id
+}
+
+
+#-------------------------------------------------------------------
+# External ALB and DNS
+#-------------------------------------------------------------------
+
+module "external_label" {
+  source = "github.com/Appreciate-Stuff/appr-tfmod-resource-label?ref=v1.1.0"
+
+  attributes = ["ext"]
+  context    = module.label.context
+}
+
+module "external_alb" {
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb?ref=v0.4.0"
+
+  context               = module.external_label.context
+  subnet_ids            = module.legacy.vpcs[local.env].subnets.public
+  vpc_id                = module.legacy.vpcs[local.env].id
+  security_group_ids    = [aws_security_group.main.id]
+  create_security_group = false
+  is_internal           = false
+}
+
+resource "aws_lb_target_group" "external" {
+  name         = "${module.external_label.id}-tg"
   target_type  = "ip"
   port         = local.container_port
   protocol     = "HTTP"
@@ -101,11 +128,11 @@ resource "aws_lb_target_group" "default" {
     protocol            = "HTTP"
     matcher             = "200,404"
   }
-  tags = module.label.tags
+  tags = module.external_label.tags
 }
 
-resource "aws_lb_listener" "default" {
-  load_balancer_arn = module.alb.alb_arn
+resource "aws_lb_listener" "external_default" {
+  load_balancer_arn = module.external_alb.alb_arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
@@ -113,12 +140,12 @@ resource "aws_lb_listener" "default" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.default.arn
+    target_group_arn = aws_lb_target_group.external.arn
   }
 }
 
-resource "aws_lb_listener" "https_redirect" {
-  load_balancer_arn = module.alb.alb_arn
+resource "aws_lb_listener" "external_https_redirect" {
+  load_balancer_arn = module.external_alb.alb_arn
   port              = "80"
   protocol          = "HTTP"
 
@@ -133,13 +160,96 @@ resource "aws_lb_listener" "https_redirect" {
   }
 }
 
-resource "aws_route53_record" "main" {
+resource "aws_route53_record" "external" {
+  zone_id = module.legacy.dns[local.domain_name].public.zone_id
+  name    = "${local.component}.${local.subdomain_names[local.env]}."
+  type    = "CNAME"
+  ttl     = 300
+  records = [module.external_alb.alb_dns_name]
+}
+
+#-------------------------------------------------------------------
+# Internal ALB and DNS
+#-------------------------------------------------------------------
+
+module "internal_label" {
+  source = "github.com/Appreciate-Stuff/appr-tfmod-resource-label?ref=v1.1.0"
+
+  attributes = ["int"]
+  context    = module.label.context
+}
+
+module "internal_alb" {
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ec2-alb?ref=v0.4.0"
+
+  context               = module.internal_label.context
+  subnet_ids            = module.legacy.vpcs[local.env].subnets.private
+  vpc_id                = module.legacy.vpcs[local.env].id
+  security_group_ids    = [aws_security_group.main.id]
+  create_security_group = false
+  is_internal           = true
+}
+
+resource "aws_lb_target_group" "internal" {
+  name         = "${module.internal_label.id}-tg"
+  target_type  = "ip"
+  port         = local.container_port
+  protocol     = "HTTP"
+  vpc_id       = module.legacy.vpcs[local.env].id
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/health"
+    port                = "traffic-port"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 6
+    protocol            = "HTTP"
+    matcher             = "200,404"
+  }
+  tags = module.internal_label.tags
+}
+
+resource "aws_lb_listener" "internal_default" {
+  load_balancer_arn = module.internal_alb.alb_arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = data.aws_acm_certificate.ssl_cert.arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.internal.arn
+  }
+}
+
+resource "aws_lb_listener" "internal_https_redirect" {
+  load_balancer_arn = module.internal_alb.alb_arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_route53_record" "internal" {
   zone_id = module.legacy.dns[local.domain_name].private.zone_id
   name    = "${local.component}.${local.subdomain_names[local.env]}."
   type    = "CNAME"
   ttl     = 300
-  records = [module.alb.alb_dns_name]
+  records = [module.internal_alb.alb_dns_name]
 }
+
+#-------------------------------------------------------------------
+# Service
+#-------------------------------------------------------------------
 
 data "terraform_remote_state" "ecr" {
   backend = "s3"
@@ -271,17 +381,21 @@ module "ecs_service" {
   scaling_target_value          = local.autoscaling_params[local.env].scaling_target_value
   ecs_task_def_network_mode     = "awsvpc"
   associate_alb                 = true
-  alb_security_group            = module.alb.alb_sg_id
+  container_port                = local.container_port
+  alb_security_group            = aws_security_group.main.id
 
   lb_target_group_arn = {
     config = [
       {
-        target_group_arn = aws_lb_target_group.default.arn
+        target_group_arn = aws_lb_target_group.external.arn
+        container_port   = local.container_port
+      },
+      {
+        target_group_arn = aws_lb_target_group.internal.arn
         container_port   = local.container_port
       }
     ]
   }
-  container_port = local.container_port
 
   tags = module.label.tags
 }
