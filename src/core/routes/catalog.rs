@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::{make_state, Language},
+    translate::{make_state, Language}, headers::features::Features,
 };
 
 use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
@@ -36,7 +36,10 @@ async fn get_explore(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     req: web::Query<ExploreRequest>,
+    features: Option<Features>,
 ) -> Result<HttpResponse, ExploreError> {
+    let features = features.unwrap_or(Features::empty());
+
     let start = req.start.clone().unwrap_or(String::from("1"));
     let size = req.size.unwrap_or(10);
     let (page, bucket_info) = match Vec::from_iter(start.splitn(3, ':')).as_slice() {
@@ -62,27 +65,47 @@ async fn get_explore(
         [..] => (0, None),
     };
 
+    let (source, next_start) = if page == 0 && features.recommendations {
+        let source = JsonCryptogramStep {
+            service: ServiceName::Recommendations,
+            method: MethodName::Lookup,
+            payload: json!({ "size": size }),
+            postflight: Language::Object(vec![
+                (String::from("ids"), Language::At(String::from("results"))),
+            ])
+        };
+        (source, vec![])
+    } else {
+        let new_page = if features.recommendations {
+            page - 1  // Offset how many pages of recs we want if we are running recommendations
+        } else {
+            page
+        };
+        let source = JsonCryptogramStep {
+            service: ServiceName::Catalog,
+            method: MethodName::Explore,
+            payload: json!({ "q": req.q, "page": new_page, "bucket_info": bucket_info, "size": size }),
+            postflight: Language::Splat(vec![
+                Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
+                Language::Object(vec![
+                    (String::from("ids"), Language::At(String::from("product_variant_ids"))),
+                ])
+            ]),
+        };
+        (source, vec![(String::from("next_start"), Language::Get(String::from("next_start")))])
+    };
+
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Explore,
-                payload: json!({ "q": req.q, "page": page, "bucket_info": bucket_info, "size": size }),
-                postflight: Language::Splat(vec![
-                    Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
-                    Language::Object(vec![
-                        (String::from("ids"), Language::At(String::from("product_variant_ids"))),
-                    ])
-                ]),
-            },
+            source,
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
                 postflight: Language::Object(vec![
-                    (String::from("results"), Language::At(String::from("results"))),
-                    (String::from("next_start"), Language::Get(String::from("next_start"))),
-                ]),
+                    vec![(String::from("results"), Language::At(String::from("results")))],
+                    next_start,
+                ].concat()),
             },
         ],
     };

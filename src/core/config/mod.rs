@@ -27,6 +27,8 @@ pub enum MethodName {
 pub enum ServiceName {
     #[serde(rename(deserialize = "catalog"))]
     Catalog,
+    #[serde(rename(deserialize = "recommendations"))]
+    Recommendations,
 }
 
 #[derive(Clone, Debug, Deserialize)]
