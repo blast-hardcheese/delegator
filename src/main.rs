@@ -70,7 +70,11 @@ async fn main() -> Result<()> {
         sentry::ClientOptions {
             environment: sentry.environment.map(|e| e.into()),
             release: sentry.release.map(|r| r.into()),
-            traces_sample_rate: 1f32,
+            session_mode: sentry::SessionMode::Request,
+            auto_session_tracking: true,
+            traces_sample_rate: 1.0,
+            enable_profiling: true,
+            profiles_sample_rate: 1.0,
             ..Default::default()
         },
     ));
@@ -78,11 +82,12 @@ async fn main() -> Result<()> {
     // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
     // I suspect it's so we get error traces in Sentry. We may need to revisit this.
     std::env::set_var("RUST_BACKTRACE", "1");
+    println!("Preparing to bind to {}:{}", http.host, http.port);
 
     HttpServer::new(move || {
         App::new()
-            .wrap(sentry_actix::Sentry::new())
             .wrap(Logger::default().log_target("accesslog"))
+            .wrap(sentry_actix::Sentry::new())
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
             .configure(|server| delegator_core::routes::configure(server, &virtualhosts))
