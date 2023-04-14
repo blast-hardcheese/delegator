@@ -70,7 +70,11 @@ async fn main() -> Result<()> {
         sentry::ClientOptions {
             environment: sentry.environment.map(|e| e.into()),
             release: sentry.release.map(|r| r.into()),
-            traces_sample_rate: 1f32,
+            session_mode: sentry::SessionMode::Request,
+            auto_session_tracking: true,
+            traces_sample_rate: 1.0,
+            enable_profiling: true,
+            profiles_sample_rate: 1.0,
             ..Default::default()
         },
     ));
