@@ -9,6 +9,8 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
 use hashbrown::HashMap;
+use sentry::Breadcrumb;
+use sentry::types::protocol::v7::Map as SentryMap;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -122,6 +124,19 @@ pub async fn do_evaluate<JC: JsonClient>(
     services: &Services,
     translator_state: translate::State,
 ) -> Result<Value, EvaluateError> {
+    let parent_span = sentry::configure_scope(|scope| scope.get_span());
+
+    let span: sentry::TransactionOrSpan = match &parent_span {
+        Some(parent) => parent.start_child("evaluate", "do_evaluate").into(),
+        None => {
+            let ctx = sentry::TransactionContext::new("evaluate", "do_evaluate");
+            sentry::start_transaction(ctx).into()
+        }
+    };
+
+    // Set the currently running span
+    sentry::configure_scope(|scope| scope.set_span(Some(span)));
+
     let mut final_result: Option<Value> = None;
 
     let mut state: HashMap<usize, JsonCryptogramStep> = cryptogram.steps.into_iter().enumerate().collect();
@@ -153,6 +168,15 @@ pub async fn do_evaluate<JC: JsonClient>(
                     .path_and_query(method.path.to_owned())
                     .build()
                     .map_err(EvaluateError::UriBuilderError)?;
+
+                sentry::add_breadcrumb(Breadcrumb {
+                    ty: String::from("evaluate_step"),
+                    data: SentryMap::from([
+                        (String::from("service"), service_name.to_string().into()),
+                        (String::from("method"), method_name.to_string().into()),
+                    ]),
+                    .. Breadcrumb::default()
+                });
 
                 let result = json_client
                     .issue_request(Method::POST, uri, payload)
