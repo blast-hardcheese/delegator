@@ -81,8 +81,8 @@ async fn main() -> Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            .wrap(sentry_actix::Sentry::new())
             .wrap(Logger::default().log_target("accesslog"))
+            .wrap(sentry_actix::Sentry::new())
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
             .configure(|server| delegator_core::routes::configure(server, &virtualhosts))
