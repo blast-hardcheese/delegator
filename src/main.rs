@@ -82,6 +82,7 @@ async fn main() -> Result<()> {
     // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
     // I suspect it's so we get error traces in Sentry. We may need to revisit this.
     std::env::set_var("RUST_BACKTRACE", "1");
+    println!("Preparing to bind to {}:{}", http.host, http.port);
 
     HttpServer::new(move || {
         App::new()
