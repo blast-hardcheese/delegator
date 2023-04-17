@@ -186,7 +186,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                 });
 
                 let result = json_client
-                    .issue_request(Method::POST, uri, payload)
+                    .issue_request(method.method.clone(), uri, payload)
                     .await?;
 
                 let new_payload = translate::step(postflight, &result, translator_state.clone())

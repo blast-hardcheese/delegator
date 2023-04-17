@@ -1,7 +1,11 @@
+pub mod http_method;
 pub mod path_and_query;
 pub mod scheme;
 
-use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
+use actix_web::http::{
+    uri::{Authority, PathAndQuery, Scheme},
+    Method,
+};
 use derive_more::Display;
 use hashbrown::HashMap;
 
@@ -55,6 +59,8 @@ pub struct SentryConfig {
 pub struct MethodDefinition {
     #[serde(with = "path_and_query")]
     pub path: PathAndQuery,
+    #[serde(with = "http_method")]
+    pub method: Method,
 }
 
 /* ServiceDefinition
