@@ -9,8 +9,8 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
 use hashbrown::HashMap;
-use sentry::Breadcrumb;
 use sentry::types::protocol::v7::Map as SentryMap;
+use sentry::Breadcrumb;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -139,7 +139,8 @@ pub async fn do_evaluate<JC: JsonClient>(
 
     let mut final_result: Option<Value> = None;
 
-    let mut state: HashMap<usize, JsonCryptogramStep> = cryptogram.steps.into_iter().enumerate().collect();
+    let mut state: HashMap<usize, JsonCryptogramStep> =
+        cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
     while step < state.len() {
         let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
@@ -175,7 +176,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                         (String::from("service"), service_name.to_string().into()),
                         (String::from("method"), method_name.to_string().into()),
                     ]),
-                    .. Breadcrumb::default()
+                    ..Breadcrumb::default()
                 });
 
                 let result = json_client
@@ -190,12 +191,11 @@ pub async fn do_evaluate<JC: JsonClient>(
                     return Ok(new_payload);
                 }
 
-                let mut next = state.remove(&next_idx).ok_or_else(|| EvaluateError::InvalidTransition)?;
+                let mut next = state
+                    .remove(&next_idx)
+                    .ok_or_else(|| EvaluateError::InvalidTransition)?;
                 next.payload = new_payload.clone();
-                state.insert(
-                    next_idx,
-                    next,
-                );
+                state.insert(next_idx, next);
 
                 Some(new_payload)
             }
@@ -220,17 +220,22 @@ async fn routes_evaluate() {
                 service: ServiceName::Catalog,
                 method: MethodName::Search,
                 payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
-                postflight: Language::Focus(String::from("results"), Box::new(Language::Object(vec![
-                    (String::from("ids"), Language::Array(Box::new(Language::At(String::from("product_variant_id"))))),
-                ]))),
+                postflight: Language::Focus(
+                    String::from("results"),
+                    Box::new(Language::Object(vec![(
+                        String::from("ids"),
+                        Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
+                    )])),
+                ),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
-                postflight: Language::Object(vec![
-                    (String::from("results"), Language::At(String::from("results"))),
-                ]),
+                postflight: Language::Object(vec![(
+                    String::from("results"),
+                    Language::At(String::from("results")),
+                )]),
             },
         ],
     };

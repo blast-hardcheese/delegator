@@ -45,7 +45,9 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
     match prog {
         Language::At(key) => Ok(current
             .get(key)
-            .ok_or_else(|| StepError { history: vec![key.clone()] })?
+            .ok_or_else(|| StepError {
+                history: vec![key.clone()],
+            })?
             .clone()),
         Language::Focus(key, next) => step(
             next,
@@ -69,13 +71,11 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
-                    step(next, x, state.clone()).map_err(|StepError { mut history }| {
-                        StepError {
-                            history: {
-                                history.insert(0, format!("[{}]", i));
-                                history
-                            },
-                        }
+                    step(next, x, state.clone()).map_err(|StepError { mut history }| StepError {
+                        history: {
+                            history.insert(0, format!("[{}]", i));
+                            history
+                        },
                     })
                 })
                 .collect::<Result<Vec<Value>, StepError>>()?,
@@ -96,22 +96,24 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
         Language::Set(into) => {
             state
                 .lock()
-                .map_err(|_e| StepError { history: vec![ format!("Set({})", into) ] })?
+                .map_err(|_e| StepError {
+                    history: vec![format!("Set({})", into)],
+                })?
                 .borrow_mut()
                 .insert(into.clone(), Arc::new(current.clone()));
             Ok(current.clone())
         }
         Language::Get(from) => {
-            let mutex = state.lock().map_err(|_e| StepError { history: vec![ String::from("<Unable to acquire mutex lock>") ] })?;
+            let mutex = state.lock().map_err(|_e| StepError {
+                history: vec![String::from("<Unable to acquire mutex lock>")],
+            })?;
             let _state = mutex.borrow();
-            let needle = _state
-                .get(from)
-                .ok_or_else(|| StepError { history: vec![ format!("Get({})", from) ] })?;
+            let needle = _state.get(from).ok_or_else(|| StepError {
+                history: vec![format!("Get({})", from)],
+            })?;
             Ok((**needle).clone())
-        },
-        Language::Const(value) => {
-            Ok(value.clone())
         }
+        Language::Const(value) => Ok(value.clone()),
     }
 }
 
