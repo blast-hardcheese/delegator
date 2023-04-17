@@ -11,7 +11,8 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::{make_state, Language}, headers::features::Features,
+    headers::features::Features,
+    translate::{make_state, Language},
 };
 
 use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
@@ -51,15 +52,11 @@ async fn get_explore(
             (_start - 1, None)
         }
         ["catalog", start] => {
-            let _start = start
-                .parse::<i32>()
-                .map_err(ExploreError::InvalidPage)?;
+            let _start = start.parse::<i32>().map_err(ExploreError::InvalidPage)?;
             (_start, None)
         }
         ["catalog", start, bucket_info] => {
-            let _start = start
-                .parse::<i32>()
-                .map_err(ExploreError::InvalidPage)?;
+            let _start = start.parse::<i32>().map_err(ExploreError::InvalidPage)?;
             (_start, Some(bucket_info.to_owned()))
         }
         [..] => (0, None),
@@ -70,18 +67,25 @@ async fn get_explore(
             service: ServiceName::Recommendations,
             method: MethodName::Lookup,
             payload: json!({ "size": size }),
-            postflight: Language::Object(vec![
-                (String::from("ids"), Language::At(String::from("results"))),
-            ])
+            postflight: Language::Object(vec![(
+                String::from("ids"),
+                Language::At(String::from("results")),
+            )]),
         };
         let next_start = format!("catalog:{}", size);
-        (source, vec![
-            (String::from("next_start"), Language::Const(json!(next_start))),
-            (String::from("has_more"), Language::Const(json!(true))),
-        ])
+        (
+            source,
+            vec![
+                (
+                    String::from("next_start"),
+                    Language::Const(json!(next_start)),
+                ),
+                (String::from("has_more"), Language::Const(json!(true))),
+            ],
+        )
     } else {
         let new_start = if features.recommendations {
-            start - 1  // Offset how many recs we want if we are running recommendations
+            start - 1 // Offset how many recs we want if we are running recommendations
         } else {
             start
         };
@@ -90,17 +94,33 @@ async fn get_explore(
             method: MethodName::Explore,
             payload: json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             postflight: Language::Splat(vec![
-                Language::Focus(String::from("next_start"), Box::new(Language::Set(String::from("next_start")))),
-                Language::Focus(String::from("has_more"), Box::new(Language::Set(String::from("has_more")))),
-                Language::Object(vec![
-                    (String::from("ids"), Language::At(String::from("product_variant_ids"))),
-                ])
+                Language::Focus(
+                    String::from("next_start"),
+                    Box::new(Language::Set(String::from("next_start"))),
+                ),
+                Language::Focus(
+                    String::from("has_more"),
+                    Box::new(Language::Set(String::from("has_more"))),
+                ),
+                Language::Object(vec![(
+                    String::from("ids"),
+                    Language::At(String::from("product_variant_ids")),
+                )]),
             ]),
         };
-        (source, vec![
-            (String::from("next_start"), Language::Get(String::from("next_start"))),
-            (String::from("has_more"), Language::Get(String::from("has_more"))),
-        ])
+        (
+            source,
+            vec![
+                (
+                    String::from("next_start"),
+                    Language::Get(String::from("next_start")),
+                ),
+                (
+                    String::from("has_more"),
+                    Language::Get(String::from("has_more")),
+                ),
+            ],
+        )
     };
 
     let cryptogram = JsonCryptogram {
@@ -110,14 +130,43 @@ async fn get_explore(
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
-                postflight: Language::Object(vec![
+                postflight: Language::Object(
                     vec![
-                        (String::from("results"), Language::At(String::from("results"))),
-                        (String::from("data"), Language::At(String::from("results"))),  // TODO: Delete this ASAP
-                        (String::from("status"), Language::Const(json!("ok"))),         // TODO: Delete this ASAP
-                    ],
-                    next_start,
-                ].concat()),
+                        vec![
+                            (
+                                String::from("results"),
+                                Language::At(String::from("results")),
+                            ),
+                            (
+                                String::from("data"),
+                                Language::Focus(
+                                    String::from("results"),
+                                    Box::new(Language::Array(Box::new(Language::Object(vec![
+                                        (
+                                            String::from("brand_name"),
+                                            Language::At(String::from("brand_variant_name")),
+                                        ),
+                                        (
+                                            String::from("catalog_id"),
+                                            Language::At(String::from("id")),
+                                        ),
+                                        (String::from("id"), Language::At(String::from("id"))),
+                                        (String::from("item_id"), Language::At(String::from("id"))),
+                                        (
+                                            String::from("link"),
+                                            Language::At(String::from("primary_image")),
+                                        ),
+                                        (String::from("title"), Language::At(String::from("name"))),
+                                    ])))),
+                                ),
+                            ), // TODO: Delete this ASAP
+                            (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
+                            (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
+                        ],
+                        next_start,
+                    ]
+                    .concat(),
+                ),
             },
         ],
     };
@@ -137,9 +186,7 @@ async fn get_explore(
     )
     .await
     .map_err(ExploreError::Evaluate)?;
-    let hm = translate_state
-        .lock()
-        .map_err(|_x| ExploreError::Mutex)?;
+    let hm = translate_state.lock().map_err(|_x| ExploreError::Mutex)?;
     if let Some(next) = hm.get("next_start") {
         result
             .as_object_mut()

@@ -1,4 +1,4 @@
-use std::{pin::Pin, future::Future};
+use std::{future::Future, pin::Pin};
 
 use actix_web::FromRequest;
 
@@ -19,19 +19,20 @@ impl Features {
 impl FromRequest for Features {
     type Error = HeaderError;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
-    fn from_request(req: &actix_web::HttpRequest, _payload: &mut actix_web::dev::Payload) -> Self::Future {
+    fn from_request(
+        req: &actix_web::HttpRequest,
+        _payload: &mut actix_web::dev::Payload,
+    ) -> Self::Future {
         let req = req.clone();
         Box::pin(async move {
-            let recommendations: bool = if let Some(v) = req.headers().get(String::from("Features")) {
+            let recommendations: bool = if let Some(v) = req.headers().get(String::from("Features"))
+            {
                 let value = v.to_str().map_err(HeaderError::InvalidFeatureHeader)?;
                 value.contains("recommendations")
-            } else  {
+            } else {
                 false
             };
-            Ok(Features {
-                recommendations
-            })
+            Ok(Features { recommendations })
         })
     }
 }
-
