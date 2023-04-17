@@ -137,7 +137,30 @@ async fn get_explore(
                                 String::from("results"),
                                 Language::At(String::from("results")),
                             ),
-                            (String::from("data"), Language::At(String::from("results"))), // TODO: Delete this ASAP
+                            (
+                                String::from("data"),
+                                Language::Focus(
+                                    String::from("results"),
+                                    Box::new(Language::Array(Box::new(Language::Object(vec![
+                                        (
+                                            String::from("brand_name"),
+                                            Language::At(String::from("brand_variant_name")),
+                                        ),
+                                        (
+                                            String::from("catalog_id"),
+                                            Language::At(String::from("id")),
+                                        ),
+                                        (String::from("id"), Language::At(String::from("id"))),
+                                        (String::from("item_id"), Language::At(String::from("id"))),
+                                        (
+                                            String::from("link"),
+                                            Language::At(String::from("primary_image")),
+                                        ),
+                                        (String::from("title"), Language::At(String::from("name"))),
+                                    ])))),
+                                ),
+                            ), // TODO: Delete this ASAP
+                            (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
                             (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
                         ],
                         next_start,
