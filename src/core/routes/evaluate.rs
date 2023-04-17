@@ -39,6 +39,7 @@ pub enum EvaluateError {
     InvalidStep(usize),
     InvalidStructure(StepError),
     InvalidTransition,
+    NetworkError,
     NoStepsSpecified,
     UnknownMethod(MethodName),
     UnknownService(ServiceName),
@@ -91,13 +92,18 @@ impl JsonClient for LiveJsonClient {
         uri: Uri,
         payload: &Value,
     ) -> Result<Value, EvaluateError> {
-        self.client
+        let mut result = self
+            .client
             .request(method, uri)
             .insert_header(("User-Agent", self.client_config.user_agent.clone()))
             .insert_header(("Content-Type", "application/json"))
             .send_json(payload)
             .await
-            .map_err(EvaluateError::ClientError)?
+            .map_err(EvaluateError::ClientError)?;
+        if !result.status().is_success() {
+            return Err(EvaluateError::NetworkError);
+        }
+        result
             .json::<Value>()
             .await
             .map_err(EvaluateError::InvalidJsonError)
