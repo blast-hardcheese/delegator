@@ -46,6 +46,7 @@ pub struct HttpConfig {
     pub client: HttpClientConfig,
     pub host: String,
     pub port: u16,
+    pub cors: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
