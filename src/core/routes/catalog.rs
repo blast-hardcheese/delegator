@@ -111,7 +111,11 @@ async fn get_explore(
                 method: MethodName::Lookup,
                 payload: json!({ "ids": [] }),
                 postflight: Language::Object(vec![
-                    vec![(String::from("results"), Language::At(String::from("results")))],
+                    vec![
+                        (String::from("results"), Language::At(String::from("results"))),
+                        (String::from("data"), Language::At(String::from("results"))),  // TODO: Delete this ASAP
+                        (String::from("status"), Language::Const(json!("ok"))),         // TODO: Delete this ASAP
+                    ],
                     next_start,
                 ].concat()),
             },
