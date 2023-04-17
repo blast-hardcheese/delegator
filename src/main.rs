@@ -1,5 +1,6 @@
 use std::io::{Error, ErrorKind, Result};
 
+use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use delegator_core::config::{
     Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation, Services,
@@ -85,8 +86,21 @@ async fn main() -> Result<()> {
     println!("Preparing to bind to {}:{}", http.host, http.port);
 
     HttpServer::new(move || {
+        let allowed_origins = http.cors.clone();
+        let cors = Cors::default()
+            .allowed_origin_fn(move |origin, _req_head| {
+                if let Ok(origin) = origin.to_str() {
+                    let origin = String::from(origin);
+                    allowed_origins.contains(&origin)
+                } else {
+                    false
+                }
+            })
+            .max_age(3600);
+
         App::new()
             .wrap(Logger::default().log_target("accesslog"))
+            .wrap(cors)
             .wrap(sentry_actix::Sentry::new())
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
