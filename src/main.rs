@@ -86,16 +86,20 @@ async fn main() -> Result<()> {
     println!("Preparing to bind to {}:{}", http.host, http.port);
 
     HttpServer::new(move || {
-        let allowed_origins = http.cors.clone();
+        // let allowed_origins = http.cors.clone();
         let cors = Cors::default()
-            .allowed_origin_fn(move |origin, _req_head| {
-                if let Ok(origin) = origin.to_str() {
-                    let origin = String::from(origin);
-                    allowed_origins.contains(&origin)
-                } else {
-                    false
-                }
-            })
+            // .allowed_origin_fn(move |origin, _req_head| {
+            //     if let Ok(origin) = origin.to_str() {
+            //         let origin = String::from(origin);
+            //         allowed_origins.contains(&origin)
+            //     } else {
+            //         false
+            //     }
+            // })
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .send_wildcard()
             .max_age(3600);
 
         App::new()
