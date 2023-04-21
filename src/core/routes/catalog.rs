@@ -57,10 +57,10 @@ async fn get_product_variants(
         steps: vec![JsonCryptogramStep {
             service: ServiceName::Catalog,
             method: MethodName::Lookup,
-            payload: json!({ "ids": ids }),
+            payload: json!({ "product_variant_ids": ids }),
             postflight: Language::Object(vec![(
                 String::from("results"),
-                Language::At(String::from("results")),
+                Language::At(String::from("product_variants")),
             )]),
         }],
     };
@@ -147,7 +147,7 @@ async fn get_explore(
                     Box::new(Language::Set(String::from("has_more"))),
                 ),
                 Language::Object(vec![(
-                    String::from("ids"),
+                    String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
                 )]),
             ]),
@@ -173,18 +173,18 @@ async fn get_explore(
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
-                payload: json!({ "ids": [] }),
+                payload: json!({ "product_variant_ids": [] }),
                 postflight: Language::Object(
                     vec![
                         vec![
                             (
                                 String::from("results"),
-                                Language::At(String::from("results")),
+                                Language::At(String::from("product_variants")),
                             ),
                             (
                                 String::from("data"),
                                 Language::Focus(
-                                    String::from("results"),
+                                    String::from("product_variants"),
                                     Box::new(Language::Array(Box::new(Language::Object(vec![
                                         (
                                             String::from("brand_name"),
@@ -221,14 +221,9 @@ async fn get_explore(
         client_config: client_config.get_ref().clone(),
     };
 
-    let result = do_evaluate(
-        cryptogram,
-        live_client,
-        services.get_ref(),
-        make_state(),
-    )
-    .await
-    .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
+        .await
+        .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
