@@ -28,7 +28,6 @@ pub struct ExploreRequest {
 enum ExploreError {
     Evaluate(super::evaluate::EvaluateError),
     InvalidPage(ParseIntError),
-    Mutex,
 }
 
 impl error::ResponseError for ExploreError {}
@@ -177,22 +176,14 @@ async fn get_explore(
         client_config: client_config.get_ref().clone(),
     };
 
-    let translate_state = make_state();
-    let mut result = do_evaluate(
+    let result = do_evaluate(
         cryptogram,
         live_client,
         services.get_ref(),
-        translate_state.clone(),
+        make_state(),
     )
     .await
     .map_err(ExploreError::Evaluate)?;
-    let hm = translate_state.lock().map_err(|_x| ExploreError::Mutex)?;
-    if let Some(next) = hm.get("next_start") {
-        result
-            .as_object_mut()
-            .unwrap()
-            .insert(String::from("next_start"), (**next).clone());
-    }
     Ok(HttpResponse::Ok().json(&result))
 }
 
