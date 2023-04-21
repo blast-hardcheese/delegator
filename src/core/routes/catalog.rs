@@ -32,6 +32,51 @@ enum ExploreError {
 
 impl error::ResponseError for ExploreError {}
 
+async fn get_product_variants(
+    client_config: Data<HttpClientConfig>,
+    services: Data<Services>,
+    raw_req: web::Query<Vec<(String, String)>>,
+) -> Result<HttpResponse, ExploreError> {
+    // There seems to be no equivalent to Flask's MultiDict in actix-web:
+    //   https://stackoverflow.com/questions/63844460/how-can-i-receive-multiple-query-params-with-the-same-name-in-actix-web
+    // Maybe something that can be contributed back to https://github.com/actix/actix-extras
+    // For the time being, Query<Vec<(String, String)>> seems to be a workaround.
+    let ids = {
+        let mut ids: Vec<String> = vec![];
+
+        for (k, v) in raw_req.0 {
+            if k == "id" {
+                ids.push(v);
+            }
+        }
+
+        ids
+    };
+
+    let cryptogram = JsonCryptogram {
+        steps: vec![JsonCryptogramStep {
+            service: ServiceName::Catalog,
+            method: MethodName::Lookup,
+            payload: json!({ "ids": ids }),
+            postflight: Language::Object(vec![(
+                String::from("results"),
+                Language::At(String::from("results")),
+            )]),
+        }],
+    };
+
+    let client = awc::Client::default();
+    let live_client = LiveJsonClient {
+        client,
+        client_config: client_config.get_ref().clone(),
+    };
+
+    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
+        .await
+        .map_err(ExploreError::Evaluate)?;
+    Ok(HttpResponse::Ok().json(&result))
+}
+
 async fn get_explore(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -189,5 +234,10 @@ async fn get_explore(
 
 pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
     let host_route = || web::route().guard(guard::Host(hostname.clone()));
-    server.route("/explore", host_route().guard(guard::Get()).to(get_explore));
+    server
+        .route("/explore", host_route().guard(guard::Get()).to(get_explore))
+        .route(
+            "/product_variants",
+            host_route().guard(guard::Get()).to(get_product_variants),
+        );
 }
