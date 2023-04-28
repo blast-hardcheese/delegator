@@ -12,7 +12,7 @@ use serde_json::json;
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
     headers::authorization::Authorization,
-    headers::{features::Features, AuthScheme},
+    headers::{authorization::BearerFields, features::Features},
     translate::{make_state, Language},
 };
 
@@ -109,12 +109,11 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let mut owner_id = None;
-    if authorization.auth_scheme == Some(AuthScheme::Bearer) {
-        // Will be replaced with Config value
-        let cookie_secret = std::env::var("HTTP_COOKIE_SECRET").unwrap_or(String::from(""));
-        owner_id = authorization.hmac_verify(cookie_secret);
-    }
+    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
+        Some(owner_id)
+    } else {
+        None
+    };
 
     let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
         let source = JsonCryptogramStep {

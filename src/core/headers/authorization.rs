@@ -5,49 +5,39 @@ use std::{future::Future, pin::Pin};
 
 use actix_web::FromRequest;
 
-use super::AuthScheme;
 use super::HeaderError;
 
-pub struct Authorization {
-    pub auth_scheme: Option<AuthScheme>,
-    pub token: Option<String>,
+pub struct BearerFields {
+    pub owner_id: String,
+}
+
+pub enum Authorization {
+    Bearer(BearerFields),
+    Empty,
+}
+
+fn hmac_verify(token: String) -> Option<String> {
+    let secret = std::env::var("HTTP_COOKIE_SECRET").ok()?;
+
+    match Vec::from_iter(token.rsplitn(2, '.')).as_slice() {
+        [signature, owner_id] => {
+            type HmacSha256 = Hmac<Sha256>;
+            let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
+            mac.update(owner_id.as_bytes());
+            let fin = general_purpose::STANDARD_NO_PAD.encode(mac.clone().finalize().into_bytes());
+            if fin == **signature {
+                Some(String::from(*owner_id))
+            } else {
+                None
+            }
+        }
+        [..] => None,
+    }
 }
 
 impl Authorization {
     pub fn empty() -> Authorization {
-        Authorization {
-            auth_scheme: None,
-            token: None,
-        }
-    }
-    pub fn hmac_verify(&self, secret: String) -> Option<String> {
-        if (self.auth_scheme != Some(AuthScheme::Bearer)) {
-            return None;
-        }
-        let owner_id: Option<String> = match Vec::from_iter(
-            self.token
-                .clone()
-                .unwrap_or(String::from(""))
-                .rsplitn(2, '.'),
-        )
-        .as_slice()
-        {
-            [signature, id] => {
-                let signature_bytes = signature.as_bytes();
-                type HmacSha256 = Hmac<Sha256>;
-                let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).unwrap();
-                mac.update((id).as_bytes());
-                let fin =
-                    general_purpose::STANDARD_NO_PAD.encode(mac.clone().finalize().into_bytes());
-                if fin == String::from(*signature) {
-                    Some(String::from(*id))
-                } else {
-                    None
-                }
-            }
-            [..] => None,
-        };
-        owner_id
+        Authorization::Empty
     }
 }
 
@@ -60,20 +50,26 @@ impl FromRequest for Authorization {
     ) -> Self::Future {
         let req = req.clone();
         Box::pin(async move {
-            let (auth_scheme, token) =
-                if let Some(v) = req.headers().get(String::from("Authorization")) {
-                    let value = v
-                        .to_str()
-                        .map_err(HeaderError::InvalidAuthorizationHeader)?;
-                    match Vec::from_iter(value.splitn(2, ' ')).as_slice() {
-                        ["Basic", string] => (Some(AuthScheme::Basic), Some(string.to_string())),
-                        ["Bearer", string] => (Some(AuthScheme::Bearer), Some(string.to_string())),
-                        [..] => (None, None),
+            let auth = if let Some(v) = req.headers().get(String::from("Authorization")) {
+                let value = v
+                    .to_str()
+                    .map_err(HeaderError::InvalidAuthorizationHeader)?;
+                match Vec::from_iter(value.splitn(2, ' ')).as_slice() {
+                    ["Bearer", token] => {
+                        if let Some(owner_id) = hmac_verify(String::from(*token)) {
+                            Authorization::Bearer(BearerFields { owner_id })
+                        } else {
+                            // TODO: This should likely be an error. Invalid auth specified is
+                            // different than no auth specified.
+                            Authorization::Empty
+                        }
                     }
-                } else {
-                    (None, None)
-                };
-            Ok(Authorization { auth_scheme, token })
+                    [..] => Authorization::Empty,
+                }
+            } else {
+                Authorization::Empty
+            };
+            Ok(auth)
         })
     }
 }
