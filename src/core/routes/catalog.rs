@@ -137,7 +137,7 @@ async fn get_explore(
             ],
         )
     } else {
-        let new_start = if features.recommendations {
+        let new_start = if owner_id.is_some() && features.recommendations {
             start - 1 // Offset how many recs we want if we are running recommendations
         } else {
             start
