@@ -11,7 +11,8 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    headers::features::Features,
+    headers::authorization::Authorization,
+    headers::{authorization::BearerFields, features::Features},
     translate::{make_state, Language},
 };
 
@@ -82,8 +83,10 @@ async fn get_explore(
     services: Data<Services>,
     req: web::Query<ExploreRequest>,
     features: Option<Features>,
+    authorization: Option<Authorization>,
 ) -> Result<HttpResponse, ExploreError> {
-    let features = features.unwrap_or(Features::empty());
+    let features: Features = features.unwrap_or(Features::empty());
+    let authorization: Authorization = authorization.unwrap_or(Authorization::empty());
 
     let start = req.start.clone().unwrap_or(String::from("1"));
     let size = req.size.unwrap_or(10);
@@ -106,11 +109,17 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let (source, next_start) = if start == 0 && features.recommendations {
+    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
+        Some(owner_id)
+    } else {
+        None
+    };
+
+    let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
         let source = JsonCryptogramStep {
             service: ServiceName::Recommendations,
             method: MethodName::Lookup,
-            payload: json!({ "size": size }),
+            payload: json!({ "size": size, "owner_id": owner_id.unwrap() }),
             postflight: Language::Object(vec![(
                 String::from("ids"),
                 Language::At(String::from("results")),
@@ -128,7 +137,7 @@ async fn get_explore(
             ],
         )
     } else {
-        let new_start = if features.recommendations {
+        let new_start = if owner_id.is_some() && features.recommendations {
             start - 1 // Offset how many recs we want if we are running recommendations
         } else {
             start
