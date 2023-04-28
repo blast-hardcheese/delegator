@@ -264,12 +264,14 @@ async fn routes_evaluate() {
                 methods.insert(
                     MethodName::Search,
                     MethodDefinition {
+                        method: Method::POST,
                         path: PathAndQuery::from_static("/search/"),
                     },
                 );
                 methods.insert(
                     MethodName::Lookup,
                     MethodDefinition {
+                        method: Method::POST,
                         path: PathAndQuery::from_static("/product_variants/"),
                     },
                 );
