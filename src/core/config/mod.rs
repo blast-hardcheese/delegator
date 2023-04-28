@@ -15,6 +15,7 @@ use serde::Deserialize;
 #[derive(Clone, Debug, Deserialize)]
 pub struct Virtualhosts {
     pub catalog: String,
+    pub pricing: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
@@ -31,6 +32,8 @@ pub enum MethodName {
 pub enum ServiceName {
     #[serde(rename(deserialize = "catalog"))]
     Catalog,
+    #[serde(rename(deserialize = "pricing"))]
+    Pricing,
     #[serde(rename(deserialize = "recommendations"))]
     Recommendations,
 }

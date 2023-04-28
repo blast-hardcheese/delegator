@@ -228,16 +228,26 @@ async fn routes_evaluate() {
                 payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
                 postflight: Language::Focus(
                     String::from("results"),
-                    Box::new(Language::Object(vec![(
-                        String::from("ids"),
-                        Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
-                    )])),
+                    Box::new(Language::Object(vec![
+                        (
+                            String::from("ids"),
+                            Language::Array(Box::new(Language::At(String::from(
+                                "product_variant_id",
+                            )))),
+                        ),
+                        (
+                            String::from("results"),
+                            Language::Const(
+                                json!({ "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]}),
+                            ),
+                        ),
+                    ])),
                 ),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
-                payload: json!({ "ids": [] }),
+                payload: json!(null),
                 postflight: Language::Object(vec![(
                     String::from("results"),
                     Language::At(String::from("results")),
@@ -264,12 +274,14 @@ async fn routes_evaluate() {
                 methods.insert(
                     MethodName::Search,
                     MethodDefinition {
+                        method: Method::POST,
                         path: PathAndQuery::from_static("/search/"),
                     },
                 );
                 methods.insert(
                     MethodName::Lookup,
                     MethodDefinition {
+                        method: Method::POST,
                         path: PathAndQuery::from_static("/product_variants/"),
                     },
                 );
@@ -281,7 +293,7 @@ async fn routes_evaluate() {
     match do_evaluate(cryptogram, TestJsonClient, &services, make_state()).await {
         Ok(value) => assert_eq!(
             value,
-            json!({ "ids": ["12313bb7-6068-4ec9-ac49-3e834181f127"] })
+            json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })
         ),
         other => {
             let _ = other.unwrap();

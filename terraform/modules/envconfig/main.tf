@@ -169,6 +169,19 @@ resource "aws_route53_record" "external" {
 }
 
 #-------------------------------------------------------------------
+# External Pricing Virtualhost DNS
+#-------------------------------------------------------------------
+
+resource "aws_route53_record" "external_vhost_pricing" {
+  zone_id = module.legacy.dns[local.domain_name].public.zone_id
+  name    = "pricing.${local.subdomain_names[local.env]}."
+  type    = "CNAME"
+  ttl     = 300
+  records = [module.external_alb.alb_dns_name]
+}
+
+
+#-------------------------------------------------------------------
 # Internal ALB and DNS
 #-------------------------------------------------------------------
 
