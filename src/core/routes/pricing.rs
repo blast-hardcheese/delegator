@@ -42,13 +42,13 @@ async fn post_resale_price(
                 (String::from("status"), Language::Const(json!("ok"))),
                 (
                     String::from("data"),
-                    Language::Focus(
-                        String::from("data"),
-                        Box::new(Language::Object(vec![(
-                            String::from("price"),
-                            Language::At(String::from("price")),
-                        )])),
-                    ),
+                    Language::Object(vec![(
+                        String::from("price"),
+                        Language::Focus(
+                            String::from("data"),
+                            Box::new(Language::At(String::from("price"))),
+                        ),
+                    )]),
                 ),
             ]),
         }],
