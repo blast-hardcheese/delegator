@@ -7,7 +7,12 @@ use derive_more::Display;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::config::{HttpClientConfig, Services};
+use crate::{
+    config::{HttpClientConfig, MethodName, ServiceName, Services},
+    translate::{make_state, Language},
+};
+
+use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
 
 #[derive(Debug, Display)]
 enum PricingError {
@@ -28,7 +33,37 @@ async fn post_resale_price(
     services: Data<Services>,
     req: Json<PostResalePrice>,
 ) -> Result<HttpResponse, PricingError> {
-    Ok(HttpResponse::Ok().json(json!(null)))
+    let cryptogram = JsonCryptogram {
+        steps: vec![JsonCryptogramStep {
+            service: ServiceName::Pricing,
+            method: MethodName::Lookup,
+            payload: json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q }),
+            postflight: Language::Object(vec![
+                (String::from("status"), Language::Const(json!("ok"))),
+                (
+                    String::from("data"),
+                    Language::Focus(
+                        String::from("data"),
+                        Box::new(Language::Object(vec![(
+                            String::from("price"),
+                            Language::At(String::from("price")),
+                        )])),
+                    ),
+                ),
+            ]),
+        }],
+    };
+
+    let client = awc::Client::default();
+    let live_client = LiveJsonClient {
+        client,
+        client_config: client_config.get_ref().clone(),
+    };
+
+    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
+        .await
+        .map_err(PricingError::Evaluate)?;
+    Ok(HttpResponse::Ok().json(&result))
 }
 
 pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
