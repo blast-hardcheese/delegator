@@ -66,11 +66,7 @@ async fn get_product_variants(
         }],
     };
 
-    let client = awc::Client::default();
-    let live_client = LiveJsonClient {
-        client,
-        client_config: client_config.get_ref().clone(),
-    };
+    let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
         .await
@@ -224,11 +220,7 @@ async fn get_explore(
         ],
     };
 
-    let client = awc::Client::default();
-    let live_client = LiveJsonClient {
-        client,
-        client_config: client_config.get_ref().clone(),
-    };
+    let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
         .await
