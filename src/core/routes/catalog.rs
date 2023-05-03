@@ -59,10 +59,10 @@ async fn get_product_variants(
             service: ServiceName::Catalog,
             method: MethodName::Lookup,
             payload: json!({ "product_variant_ids": ids }),
-            postflight: Language::Object(vec![(
+            postflight: Some(Language::Object(vec![(
                 String::from("results"),
                 Language::At(String::from("product_variants")),
-            )]),
+            )])),
         }],
     };
 
@@ -120,10 +120,10 @@ async fn get_explore(
             service: ServiceName::Recommendations,
             method: MethodName::Lookup,
             payload: json!({ "size": size, "owner_id": owner_id.unwrap() }),
-            postflight: Language::Object(vec![(
+            postflight: Some(Language::Object(vec![(
                 String::from("ids"),
                 Language::At(String::from("results")),
-            )]),
+            )])),
         };
         let next_start = format!("catalog:{}", size);
         (
@@ -146,7 +146,7 @@ async fn get_explore(
             service: ServiceName::Catalog,
             method: MethodName::Explore,
             payload: json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
-            postflight: Language::Splat(vec![
+            postflight: Some(Language::Splat(vec![
                 Language::Focus(
                     String::from("next_start"),
                     Box::new(Language::Set(String::from("next_start"))),
@@ -159,7 +159,7 @@ async fn get_explore(
                     String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
                 )]),
-            ]),
+            ])),
         };
         (
             source,
@@ -183,7 +183,7 @@ async fn get_explore(
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!({ "product_variant_ids": [] }),
-                postflight: Language::Object(
+                postflight: Some(Language::Object(
                     vec![
                         vec![
                             (
@@ -219,7 +219,7 @@ async fn get_explore(
                         next_start,
                     ]
                     .concat(),
-                ),
+                )),
             },
         ],
     };

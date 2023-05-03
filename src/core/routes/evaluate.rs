@@ -24,7 +24,7 @@ pub struct JsonCryptogramStep {
     pub service: ServiceName,
     pub method: MethodName,
     pub payload: Value,
-    pub postflight: Language,
+    pub postflight: Option<Language>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -189,8 +189,12 @@ pub async fn do_evaluate<JC: JsonClient>(
                     .issue_request(method.method.clone(), uri, payload)
                     .await?;
 
-                let new_payload = translate::step(postflight, &result, translator_state.clone())
-                    .map_err(EvaluateError::InvalidStructure)?;
+                let new_payload = if let Some(pf) = postflight {
+                    translate::step(pf, &result, translator_state.clone())
+                        .map_err(EvaluateError::InvalidStructure)?
+                } else {
+                    result
+                };
 
                 let next_idx = step + 1;
                 if !state.contains_key(&next_idx) {
