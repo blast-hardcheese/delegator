@@ -26,6 +26,7 @@ struct PostResalePrice {
     brand: String,
     image_url: String,
     q: String,
+    product_variant_id: Option<String>,
 }
 
 async fn post_resale_price(
@@ -37,19 +38,10 @@ async fn post_resale_price(
         steps: vec![JsonCryptogramStep {
             service: ServiceName::Pricing,
             method: MethodName::Lookup,
-            payload: json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q }),
+            payload: json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }),
             postflight: Language::Object(vec![
                 (String::from("status"), Language::Const(json!("ok"))),
-                (
-                    String::from("data"),
-                    Language::Object(vec![(
-                        String::from("price"),
-                        Language::Focus(
-                            String::from("data"),
-                            Box::new(Language::At(String::from("price"))),
-                        ),
-                    )]),
-                ),
+                (String::from("data"), Language::At(String::from("data"))),
             ]),
         }],
     };
