@@ -43,11 +43,7 @@ async fn post_resale_price(
         }],
     };
 
-    let client = awc::Client::default();
-    let live_client = LiveJsonClient {
-        client,
-        client_config: client_config.get_ref().clone(),
-    };
+    let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
         .await

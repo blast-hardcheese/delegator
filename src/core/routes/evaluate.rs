@@ -53,11 +53,7 @@ async fn evaluate(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
 ) -> Result<HttpResponse, EvaluateError> {
-    let client = awc::Client::default();
-    let live_client = LiveJsonClient {
-        client,
-        client_config: client_config.get_ref().clone(),
-    };
+    let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(
         cryptogram.into_inner(),
@@ -82,6 +78,20 @@ pub trait JsonClient {
 pub struct LiveJsonClient {
     pub client: awc::Client,
     pub client_config: HttpClientConfig,
+}
+
+impl LiveJsonClient {
+    pub fn build(client_config: &HttpClientConfig) -> LiveJsonClient {
+        let client = {
+            awc::ClientBuilder::new()
+                .timeout(client_config.default_timeout)
+                .finish()
+        };
+        LiveJsonClient {
+            client,
+            client_config: client_config.clone(),
+        }
+    }
 }
 
 #[async_trait(?Send)]

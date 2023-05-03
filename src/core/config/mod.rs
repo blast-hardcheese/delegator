@@ -1,6 +1,9 @@
 pub mod http_method;
 pub mod path_and_query;
 pub mod scheme;
+mod stringy_duration;
+
+use std::time::Duration;
 
 use actix_web::http::{
     uri::{Authority, PathAndQuery, Scheme},
@@ -42,6 +45,8 @@ pub enum ServiceName {
 pub struct HttpClientConfig {
     #[serde(alias = "user-agent")]
     pub user_agent: String,
+    #[serde(alias = "default-timeout", with = "stringy_duration")]
+    pub default_timeout: Duration,
 }
 
 #[derive(Clone, Debug, Deserialize)]
