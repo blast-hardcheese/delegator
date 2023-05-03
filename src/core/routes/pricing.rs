@@ -9,7 +9,7 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::{make_state, Language},
+    translate::make_state,
 };
 
 use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
@@ -39,10 +39,7 @@ async fn post_resale_price(
             service: ServiceName::Pricing,
             method: MethodName::Lookup,
             payload: json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }),
-            postflight: Some(Language::Object(vec![
-                (String::from("status"), Language::Const(json!("ok"))),
-                (String::from("data"), Language::At(String::from("data"))),
-            ])),
+            postflight: None,
         }],
     };
 
