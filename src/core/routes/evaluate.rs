@@ -66,18 +66,36 @@ impl JsonResponseError for EvaluateError {
             })
         }
         match self {
-            Self::ClientError(_inner) => err("client"),
-            Self::InvalidJsonError(_inner) => err("protocol"),
-            Self::InvalidPayloadError(_inner) => err("payload"),
+            Self::ClientError(inner) => {
+                sentry::capture_error(inner);
+                err("client")
+            }
+            Self::InvalidJsonError(inner) => {
+                sentry::capture_error(inner);
+                err("protocol")
+            }
+            Self::InvalidPayloadError(inner) => {
+                sentry::capture_error(inner);
+                err("payload")
+            }
             Self::UnknownStep(_num) => err("unknown_step"),
-            Self::InvalidStructure(_inner) => err("payload"),
+            Self::InvalidStructure(inner) => {
+                sentry::capture_error(inner);
+                err("payload")
+            }
             Self::InvalidTransition(_steps, _step) => err("unknown_transition"),
             Self::NetworkError(_context) => err("network"),
             Self::NoStepsSpecified => err("steps"),
             Self::UnknownMethod(_service_name, _method_name) => err("unknown_method"),
             Self::UnknownService(_service_name) => err("unknown_service"),
-            Self::UriBuilderError(_inner) => err("unknown_service"),
-            Self::Utf8Error(_inner) => err("encoding"),
+            Self::UriBuilderError(inner) => {
+                sentry::capture_error(inner);
+                err("unknown_service")
+            }
+            Self::Utf8Error(inner) => {
+                sentry::capture_error(inner);
+                err("encoding")
+            }
         }
     }
 }
