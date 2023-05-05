@@ -8,12 +8,12 @@ use actix_web::{
     HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
-use derive_more::Display;
 use hashbrown::HashMap;
 use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::fmt;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
@@ -30,12 +30,18 @@ pub struct JsonCryptogramStep {
     pub postflight: Option<Language>,
 }
 
+impl fmt::Display for EvaluateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogram {
     pub steps: Vec<JsonCryptogramStep>,
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
