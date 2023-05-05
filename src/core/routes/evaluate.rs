@@ -51,7 +51,7 @@ pub enum EvaluateError {
     InvalidTransition,
     NetworkError(Value),
     NoStepsSpecified,
-    UnknownMethod(MethodName),
+    UnknownMethod(ServiceName, MethodName),
     UnknownService(ServiceName),
     UriBuilderError(error::HttpError),
     Utf8Error(Utf8Error),
@@ -74,7 +74,7 @@ impl JsonResponseError for EvaluateError {
             Self::InvalidTransition => err("unknown_transition"),
             Self::NetworkError(_context) => err("network"),
             Self::NoStepsSpecified => err("steps"),
-            Self::UnknownMethod(_method_name) => err("unknown_method"),
+            Self::UnknownMethod(_service_name, _method_name) => err("unknown_method"),
             Self::UnknownService(_service_name) => err("unknown_service"),
             Self::UriBuilderError(_inner) => err("unknown_service"),
             Self::Utf8Error(_inner) => err("encoding"),
@@ -226,9 +226,9 @@ pub async fn do_evaluate<JC: JsonClient>(
                 authority,
                 methods,
             } => {
-                let method = methods
-                    .get(method_name)
-                    .ok_or_else(|| EvaluateError::UnknownMethod(method_name.to_owned()))?;
+                let method = methods.get(method_name).ok_or_else(|| {
+                    EvaluateError::UnknownMethod(service_name.to_owned(), method_name.to_owned())
+                })?;
 
                 let uri = Uri::builder()
                     .scheme(scheme)
