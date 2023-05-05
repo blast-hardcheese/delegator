@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use actix_web::{
     body::BoxBody,
-    error,
+    error::{self, PayloadError},
     http::{Method, Uri},
     web::{self, Data, Json},
     HttpResponse, ResponseError,
@@ -13,7 +13,7 @@ use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::fmt;
+use std::{fmt, str::Utf8Error};
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
@@ -45,14 +45,16 @@ pub struct JsonCryptogram {
 pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
+    InvalidPayloadError(PayloadError),
     UnknownStep(usize),
     InvalidStructure(StepError),
     InvalidTransition,
-    NetworkError,
+    NetworkError(Value),
     NoStepsSpecified,
     UnknownMethod(MethodName),
     UnknownService(ServiceName),
     UriBuilderError(error::HttpError),
+    Utf8Error(Utf8Error),
 }
 impl JsonResponseError for EvaluateError {
     fn error_as_json(&self) -> Value {
@@ -66,14 +68,16 @@ impl JsonResponseError for EvaluateError {
         match self {
             Self::ClientError(_inner) => err("client"),
             Self::InvalidJsonError(_inner) => err("protocol"),
+            Self::InvalidPayloadError(_inner) => err("payload"),
             Self::UnknownStep(_num) => err("unknown_step"),
             Self::InvalidStructure(_inner) => err("payload"),
             Self::InvalidTransition => err("unknown_transition"),
-            Self::NetworkError => err("network"),
+            Self::NetworkError(_context) => err("network"),
             Self::NoStepsSpecified => err("steps"),
             Self::UnknownMethod(_method_name) => err("unknown_method"),
             Self::UnknownService(_service_name) => err("unknown_service"),
             Self::UriBuilderError(_inner) => err("unknown_service"),
+            Self::Utf8Error(_inner) => err("encoding"),
         }
     }
 }
@@ -147,7 +151,18 @@ impl JsonClient for LiveJsonClient {
             .await
             .map_err(EvaluateError::ClientError)?;
         if !result.status().is_success() {
-            return Err(EvaluateError::NetworkError);
+            let context = if let Ok(json) = result.json::<Value>().await {
+                json
+            } else {
+                let bytes = result
+                    .body()
+                    .await
+                    .map_err(EvaluateError::InvalidPayloadError)?;
+                let text = std::str::from_utf8(&bytes).map_err(EvaluateError::Utf8Error)?;
+                Value::String(String::from(text))
+            };
+
+            return Err(EvaluateError::NetworkError(context));
         }
         result
             .json::<Value>()
