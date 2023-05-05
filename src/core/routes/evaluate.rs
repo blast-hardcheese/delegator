@@ -240,7 +240,7 @@ async fn routes_evaluate() {
                 service: ServiceName::Catalog,
                 method: MethodName::Search,
                 payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
-                postflight: Language::Focus(
+                postflight: Some(Language::Focus(
                     String::from("results"),
                     Box::new(Language::Object(vec![
                         (
@@ -256,16 +256,16 @@ async fn routes_evaluate() {
                             ),
                         ),
                     ])),
-                ),
+                )),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!(null),
-                postflight: Language::Object(vec![(
+                postflight: Some(Language::Object(vec![(
                     String::from("results"),
                     Language::At(String::from("results")),
-                )]),
+                )])),
             },
         ],
     };
