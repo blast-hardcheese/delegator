@@ -3,6 +3,7 @@ use actix_web::web;
 use crate::config::Virtualhosts;
 
 pub mod catalog;
+pub mod errors;
 pub mod evaluate;
 pub mod healthcheck;
 pub mod pricing;

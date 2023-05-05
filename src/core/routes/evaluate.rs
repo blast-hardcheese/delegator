@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 
 use actix_web::{
+    body::BoxBody,
     error,
     http::{Method, Uri},
     web::{self, Data, Json},
-    HttpResponse,
+    HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
 use derive_more::Display;
@@ -12,12 +13,14 @@ use hashbrown::HashMap;
 use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
     translate::{self, make_state, Language, StepError},
 };
+
+use super::errors::{json_error_response, JsonResponseError};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
@@ -45,8 +48,35 @@ pub enum EvaluateError {
     UnknownService(ServiceName),
     UriBuilderError(error::HttpError),
 }
+impl JsonResponseError for EvaluateError {
+    fn error_as_json(&self) -> Value {
+        fn err(msg: &str) -> Value {
+            json!({
+               "error": {
+                   "kind": String::from(msg),
+               }
+            })
+        }
+        match self {
+            Self::ClientError(_inner) => err("client"),
+            Self::InvalidJsonError(_inner) => err("protocol"),
+            Self::InvalidStep(_num) => err("unknown_step"),
+            Self::InvalidStructure(_inner) => err("payload"),
+            Self::InvalidTransition => err("unknown_transition"),
+            Self::NetworkError => err("network"),
+            Self::NoStepsSpecified => err("steps"),
+            Self::UnknownMethod(_method_name) => err("unknown_method"),
+            Self::UnknownService(_service_name) => err("unknown_service"),
+            Self::UriBuilderError(_inner) => err("unknown_service"),
+        }
+    }
+}
 
-impl error::ResponseError for EvaluateError {}
+impl ResponseError for EvaluateError {
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        json_error_response(self)
+    }
+}
 
 async fn evaluate(
     cryptogram: Json<JsonCryptogram>,
