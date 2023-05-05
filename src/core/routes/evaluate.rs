@@ -45,7 +45,7 @@ pub struct JsonCryptogram {
 pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
-    InvalidStep(usize),
+    UnknownStep(usize),
     InvalidStructure(StepError),
     InvalidTransition,
     NetworkError,
@@ -66,7 +66,7 @@ impl JsonResponseError for EvaluateError {
         match self {
             Self::ClientError(_inner) => err("client"),
             Self::InvalidJsonError(_inner) => err("protocol"),
-            Self::InvalidStep(_num) => err("unknown_step"),
+            Self::UnknownStep(_num) => err("unknown_step"),
             Self::InvalidStructure(_inner) => err("payload"),
             Self::InvalidTransition => err("unknown_transition"),
             Self::NetworkError => err("network"),
@@ -195,7 +195,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
     while step < state.len() {
-        let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
+        let current_step = state.get(&step).ok_or(EvaluateError::UnknownStep(step))?;
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
