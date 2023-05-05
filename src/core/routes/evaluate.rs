@@ -48,7 +48,7 @@ pub enum EvaluateError {
     InvalidPayloadError(PayloadError),
     UnknownStep(usize),
     InvalidStructure(StepError),
-    InvalidTransition,
+    InvalidTransition(Vec<usize>, usize),
     NetworkError(Value),
     NoStepsSpecified,
     UnknownMethod(ServiceName, MethodName),
@@ -71,7 +71,7 @@ impl JsonResponseError for EvaluateError {
             Self::InvalidPayloadError(_inner) => err("payload"),
             Self::UnknownStep(_num) => err("unknown_step"),
             Self::InvalidStructure(_inner) => err("payload"),
-            Self::InvalidTransition => err("unknown_transition"),
+            Self::InvalidTransition(_steps, _step) => err("unknown_transition"),
             Self::NetworkError(_context) => err("network"),
             Self::NoStepsSpecified => err("steps"),
             Self::UnknownMethod(_service_name, _method_name) => err("unknown_method"),
@@ -262,9 +262,9 @@ pub async fn do_evaluate<JC: JsonClient>(
                     return Ok(new_payload);
                 }
 
-                let mut next = state
-                    .remove(&next_idx)
-                    .ok_or_else(|| EvaluateError::InvalidTransition)?;
+                let mut next = state.remove(&next_idx).ok_or_else(|| {
+                    EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
+                })?;
                 next.payload = new_payload.clone();
                 state.insert(next_idx, next);
 
