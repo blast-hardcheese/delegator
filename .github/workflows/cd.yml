@@ -67,7 +67,7 @@ jobs:
         with:
           ignore_missing: true
           ignore_empty: true
-          version: ${{ needs.docker-build-push.outputs.tag }}
+          version: delegator-${{ needs.docker-build-push.outputs.tag }}
 
   call-deploy-to-env:
     uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1

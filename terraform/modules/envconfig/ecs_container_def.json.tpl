@@ -23,7 +23,7 @@
         },
         {
           "name": "SENTRY_RELEASE",
-          "value": "${ image_tag }"
+          "value": "${ name }-${ image_tag }"
         }
       ],
       "secrets": ${ secrets_json },
