@@ -27,11 +27,15 @@ pub enum Language {
 #[derive(Debug)]
 pub struct StepError {
     history: Vec<String>,
+    choices: Option<Value>,
 }
 
 impl StepError {
     fn new(history: Vec<String>) -> StepError {
-        StepError { history }
+        StepError {
+            history,
+            choices: None,
+        }
     }
 
     fn prepend_history(mut self, before: String) -> StepError {
@@ -44,7 +48,14 @@ impl std::error::Error for StepError {}
 
 impl Display for StepError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(fmt, "StepError({})", self.history.join(", "))
+        write!(
+            fmt,
+            "StepError({}, {})",
+            self.history.join(", "),
+            self.choices
+                .clone()
+                .map_or(String::from("[]"), |cs| format!("{}", cs))
+        )
     }
 }
 
@@ -60,6 +71,9 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
             .get(key)
             .ok_or_else(|| StepError {
                 history: vec![key.clone()],
+                choices: current
+                    .as_object()
+                    .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
             })?
             .clone()),
         Language::Focus(key, next) => step(
@@ -123,7 +137,11 @@ fn translate_error_at() {
     let prog = Language::At(String::from("foo"));
 
     let given = json!({ "bar": "baz" });
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -134,7 +152,11 @@ fn translate_error_array() {
     let prog = Language::Array(Box::new(Language::At(String::from("foo"))));
 
     let given = json!([{ "bar": "baz" }]);
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["[0]", "foo"]);
     }
 }
@@ -148,7 +170,11 @@ fn translate_error_focus() {
     );
 
     let given = json!({ "baz": "blix" });
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -162,7 +188,11 @@ fn translate_error_object() {
     ]);
 
     let given = json!({ "foo": "foo" });
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["bar"]);
     }
 }
