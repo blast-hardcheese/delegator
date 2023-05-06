@@ -1,23 +1,26 @@
 use async_trait::async_trait;
 
 use actix_web::{
-    error,
+    body::BoxBody,
+    error::{self, PayloadError},
     http::{Method, Uri},
     web::{self, Data, Json},
-    HttpResponse,
+    HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
-use derive_more::Display;
 use hashbrown::HashMap;
 use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::{fmt, str::Utf8Error};
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
     translate::{self, make_state, Language, StepError},
 };
+
+use super::errors::{json_error_response, JsonResponseError};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogramStep {
@@ -27,26 +30,156 @@ pub struct JsonCryptogramStep {
     pub postflight: Option<Language>,
 }
 
+impl fmt::Display for EvaluateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogram {
     pub steps: Vec<JsonCryptogramStep>,
 }
 
-#[derive(Debug, Display)]
+#[derive(Debug)]
 pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
-    InvalidStep(usize),
+    InvalidPayloadError(PayloadError),
+    UnknownStep(usize),
     InvalidStructure(StepError),
-    InvalidTransition,
-    NetworkError,
+    InvalidTransition(Vec<usize>, usize),
+    NetworkError(Value),
     NoStepsSpecified,
-    UnknownMethod(MethodName),
+    UnknownMethod(ServiceName, MethodName),
     UnknownService(ServiceName),
     UriBuilderError(error::HttpError),
+    Utf8Error(Utf8Error),
 }
 
-impl error::ResponseError for EvaluateError {}
+impl JsonResponseError for EvaluateError {
+    fn error_as_json(&self) -> Value {
+        fn breadcrumb(msg: &str) -> Breadcrumb {
+            Breadcrumb {
+                message: Some(String::from(msg)),
+                ty: String::from("evaluate_step"),
+                category: Some(String::from("error")),
+                ..Breadcrumb::default()
+            }
+        }
+        fn err(msg: &str) -> Value {
+            json!({
+               "error": {
+                   "kind": String::from(msg),
+               }
+            })
+        }
+        match self {
+            Self::ClientError(inner) => {
+                sentry::add_breadcrumb(breadcrumb("ClientError"));
+                sentry::capture_error(inner);
+                err("client")
+            }
+            Self::InvalidJsonError(inner) => {
+                sentry::add_breadcrumb(breadcrumb("InvalidJsonError"));
+                sentry::capture_error(inner);
+                err("protocol")
+            }
+            Self::InvalidPayloadError(inner) => {
+                sentry::add_breadcrumb(breadcrumb("PayloadError"));
+                sentry::capture_error(inner);
+                err("payload")
+            }
+            Self::UnknownStep(num) => {
+                sentry::add_breadcrumb({
+                    let mut b = breadcrumb("UnknownStep");
+                    b.data
+                        .insert(String::from("step"), Value::Number((*num).into()));
+                    b
+                });
+                err("unknown_step")
+            }
+            Self::InvalidStructure(inner) => {
+                sentry::add_breadcrumb(breadcrumb("PayloadError"));
+                sentry::capture_error(inner);
+                err("payload")
+            }
+            Self::InvalidTransition(steps, step) => {
+                sentry::add_breadcrumb({
+                    let mut b = breadcrumb("InvalidTransition");
+                    b.data.insert(
+                        String::from("steps"),
+                        Value::Array(steps.iter().map(|i| Value::Number((*i).into())).collect()),
+                    );
+                    b.data
+                        .insert(String::from("step"), Value::Number((*step).into()));
+                    b
+                });
+                err("unknown_transition")
+            }
+            Self::NetworkError(context) => {
+                sentry::add_breadcrumb({
+                    let mut b = breadcrumb("NetworkError");
+                    if let Value::Object(hm) = context {
+                        for (k, v) in hm.iter() {
+                            b.data.insert(k.clone(), v.clone());
+                        }
+                    } else {
+                        b.data.insert(String::from("_json"), context.clone());
+                    }
+                    b
+                });
+                err("network")
+            }
+            Self::NoStepsSpecified => {
+                sentry::add_breadcrumb(breadcrumb("NoStepsSpecified"));
+                err("steps")
+            }
+            Self::UnknownMethod(service_name, method_name) => {
+                sentry::add_breadcrumb({
+                    let mut b = breadcrumb("UnknownMethod");
+                    b.data.insert(
+                        String::from("service"),
+                        Value::String(service_name.to_string()),
+                    );
+                    b.data.insert(
+                        String::from("method"),
+                        Value::String(method_name.to_string()),
+                    );
+                    b
+                });
+                err("unknown_method")
+            }
+            Self::UnknownService(service_name) => {
+                sentry::add_breadcrumb({
+                    let mut b = breadcrumb("UnknownService");
+                    b.data.insert(
+                        String::from("service"),
+                        Value::String(service_name.to_string()),
+                    );
+                    b
+                });
+                err("unknown_service")
+            }
+            Self::UriBuilderError(inner) => {
+                sentry::add_breadcrumb(breadcrumb("UriBuilderError"));
+                sentry::capture_error(inner);
+                err("unknown_service")
+            }
+            Self::Utf8Error(inner) => {
+                sentry::add_breadcrumb(breadcrumb("Utf8Error"));
+                sentry::capture_error(inner);
+                err("encoding")
+            }
+        }
+    }
+}
+
+impl ResponseError for EvaluateError {
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        json_error_response(self)
+    }
+}
 
 async fn evaluate(
     cryptogram: Json<JsonCryptogram>,
@@ -111,7 +244,18 @@ impl JsonClient for LiveJsonClient {
             .await
             .map_err(EvaluateError::ClientError)?;
         if !result.status().is_success() {
-            return Err(EvaluateError::NetworkError);
+            let context = if let Ok(json) = result.json::<Value>().await {
+                json
+            } else {
+                let bytes = result
+                    .body()
+                    .await
+                    .map_err(EvaluateError::InvalidPayloadError)?;
+                let text = std::str::from_utf8(&bytes).map_err(EvaluateError::Utf8Error)?;
+                Value::String(String::from(text))
+            };
+
+            return Err(EvaluateError::NetworkError(context));
         }
         result
             .json::<Value>()
@@ -159,7 +303,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
     while step < state.len() {
-        let current_step = state.get(&step).ok_or(EvaluateError::InvalidStep(step))?;
+        let current_step = state.get(&step).ok_or(EvaluateError::UnknownStep(step))?;
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
@@ -175,9 +319,9 @@ pub async fn do_evaluate<JC: JsonClient>(
                 authority,
                 methods,
             } => {
-                let method = methods
-                    .get(method_name)
-                    .ok_or_else(|| EvaluateError::UnknownMethod(method_name.to_owned()))?;
+                let method = methods.get(method_name).ok_or_else(|| {
+                    EvaluateError::UnknownMethod(service_name.to_owned(), method_name.to_owned())
+                })?;
 
                 let uri = Uri::builder()
                     .scheme(scheme)
@@ -211,9 +355,9 @@ pub async fn do_evaluate<JC: JsonClient>(
                     return Ok(new_payload);
                 }
 
-                let mut next = state
-                    .remove(&next_idx)
-                    .ok_or_else(|| EvaluateError::InvalidTransition)?;
+                let mut next = state.remove(&next_idx).ok_or_else(|| {
+                    EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
+                })?;
                 next.payload = new_payload.clone();
                 state.insert(next_idx, next);
 
@@ -240,7 +384,7 @@ async fn routes_evaluate() {
                 service: ServiceName::Catalog,
                 method: MethodName::Search,
                 payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
-                postflight: Language::Focus(
+                postflight: Some(Language::Focus(
                     String::from("results"),
                     Box::new(Language::Object(vec![
                         (
@@ -256,16 +400,16 @@ async fn routes_evaluate() {
                             ),
                         ),
                     ])),
-                ),
+                )),
             },
             JsonCryptogramStep {
                 service: ServiceName::Catalog,
                 method: MethodName::Lookup,
                 payload: json!(null),
-                postflight: Language::Object(vec![(
+                postflight: Some(Language::Object(vec![(
                     String::from("results"),
                     Language::At(String::from("results")),
-                )]),
+                )])),
             },
         ],
     };

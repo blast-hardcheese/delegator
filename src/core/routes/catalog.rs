@@ -1,13 +1,15 @@
 use derive_more::Display;
+use sentry::Breadcrumb;
 use std::num::ParseIntError;
 
 use actix_web::{
+    body::BoxBody,
     error, guard,
     web::{self, Data},
     HttpResponse,
 };
 use serde::Deserialize;
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
@@ -16,7 +18,10 @@ use crate::{
     translate::{make_state, Language},
 };
 
-use super::evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient};
+use super::{
+    errors::{json_error_response, JsonResponseError},
+    evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient},
+};
 
 #[derive(Debug, Deserialize)]
 pub struct ExploreRequest {
@@ -31,7 +36,55 @@ enum ExploreError {
     InvalidPage(ParseIntError),
 }
 
-impl error::ResponseError for ExploreError {}
+impl JsonResponseError for ExploreError {
+    fn error_as_json(&self) -> Value {
+        fn breadcrumb(msg: &str) -> Breadcrumb {
+            Breadcrumb {
+                message: Some(String::from(msg)),
+                ty: String::from("input"),
+                category: Some(String::from("error")),
+                ..Breadcrumb::default()
+            }
+        }
+        fn err(msg: &str) -> Value {
+            json!({
+               "error": {
+                   "kind": String::from(msg),
+               }
+            })
+        }
+        match self {
+            Self::InvalidPage(inner) => {
+                sentry::add_breadcrumb(breadcrumb("InvalidPage"));
+                sentry::capture_error(inner);
+                err("invalid_page")
+            }
+            Self::Evaluate(_inner) => {
+                json!(null) // NB: JsonResponseError is as good as I'm able to write it at this
+                            // point, but this is an unfortunate edge case. error_response calls
+                            // the underlying json_error_response(inner) in this case, but we
+                            // still need to define it here.
+            }
+        }
+    }
+}
+
+impl error::ResponseError for ExploreError {
+    fn error_response(&self) -> HttpResponse<BoxBody> {
+        match self {
+            Self::InvalidPage(_inner) => json_error_response(self),
+            Self::Evaluate(inner) => {
+                sentry::add_breadcrumb(Breadcrumb {
+                    message: Some(String::from("Error during catalog")),
+                    ty: String::from("evaluate_step"),
+                    category: Some(String::from("error")),
+                    ..Breadcrumb::default()
+                });
+                json_error_response(inner)
+            }
+        }
+    }
+}
 
 async fn get_product_variants(
     client_config: Data<HttpClientConfig>,

@@ -27,11 +27,35 @@ pub enum Language {
 #[derive(Debug)]
 pub struct StepError {
     history: Vec<String>,
+    choices: Option<Value>,
 }
+
+impl StepError {
+    fn new(root: String) -> StepError {
+        StepError {
+            history: vec![root],
+            choices: None,
+        }
+    }
+
+    fn prepend_history(mut self, before: String) -> StepError {
+        self.history.insert(0, before);
+        self
+    }
+}
+
+impl std::error::Error for StepError {}
 
 impl Display for StepError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(fmt, "StepError({})", self.history.join(", "))
+        write!(
+            fmt,
+            "StepError({}, {})",
+            self.history.join(", "),
+            self.choices
+                .clone()
+                .map_or(String::from("[]"), |cs| format!("{}", cs))
+        )
     }
 }
 
@@ -47,36 +71,31 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
             .get(key)
             .ok_or_else(|| StepError {
                 history: vec![key.clone()],
+                choices: current
+                    .as_object()
+                    .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
             })?
             .clone()),
         Language::Focus(key, next) => step(
             next,
             current.get(key).ok_or_else(|| StepError {
                 history: vec![key.clone()],
+                choices: current
+                    .as_object()
+                    .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
             })?,
             state,
         )
-        .map_err(|StepError { mut history }| StepError {
-            history: {
-                history.insert(0, key.clone());
-                history
-            },
-        }),
+        .map_err(|se| se.prepend_history(key.clone())),
         Language::Array(next) => Ok(Value::Array(
             current
                 .as_array()
-                .ok_or_else(|| StepError {
-                    history: vec![String::from("<Not an array>")],
-                })?
+                .ok_or_else(|| StepError::new(String::from("<Not an array>")))?
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
-                    step(next, x, state.clone()).map_err(|StepError { mut history }| StepError {
-                        history: {
-                            history.insert(0, format!("[{}]", i));
-                            history
-                        },
-                    })
+                    step(next, x, state.clone())
+                        .map_err(|se| se.prepend_history(format!("[{}]", i)))
                 })
                 .collect::<Result<Vec<Value>, StepError>>()?,
         )),
@@ -96,21 +115,19 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
         Language::Set(into) => {
             state
                 .lock()
-                .map_err(|_e| StepError {
-                    history: vec![format!("Set({})", into)],
-                })?
+                .map_err(|_e| StepError::new(format!("Set({})", into)))?
                 .borrow_mut()
                 .insert(into.clone(), Arc::new(current.clone()));
             Ok(current.clone())
         }
         Language::Get(from) => {
-            let mutex = state.lock().map_err(|_e| StepError {
-                history: vec![String::from("<Unable to acquire mutex lock>")],
-            })?;
+            let mutex = state
+                .lock()
+                .map_err(|_e| StepError::new(String::from("<Unable to acquire mutex lock>")))?;
             let _state = mutex.borrow();
-            let needle = _state.get(from).ok_or_else(|| StepError {
-                history: vec![format!("Get({})", from)],
-            })?;
+            let needle = _state
+                .get(from)
+                .ok_or_else(|| StepError::new(format!("Get({})", from)))?;
             Ok((**needle).clone())
         }
         Language::Const(value) => Ok(value.clone()),
@@ -123,7 +140,11 @@ fn translate_error_at() {
     let prog = Language::At(String::from("foo"));
 
     let given = json!({ "bar": "baz" });
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -134,7 +155,11 @@ fn translate_error_array() {
     let prog = Language::Array(Box::new(Language::At(String::from("foo"))));
 
     let given = json!([{ "bar": "baz" }]);
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["[0]", "foo"]);
     }
 }
@@ -148,7 +173,11 @@ fn translate_error_focus() {
     );
 
     let given = json!({ "baz": "blix" });
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["foo"]);
     }
 }
@@ -162,7 +191,11 @@ fn translate_error_object() {
     ]);
 
     let given = json!({ "foo": "foo" });
-    if let Some(StepError { history }) = step(&prog, &given, make_state()).err() {
+    if let Some(StepError {
+        choices: _,
+        history,
+    }) = step(&prog, &given, make_state()).err()
+    {
         assert_eq!(history, vec!["bar"]);
     }
 }
