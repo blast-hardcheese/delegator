@@ -86,6 +86,44 @@ impl error::ResponseError for ExploreError {
     }
 }
 
+async fn get_product_variant_image(
+    client_config: Data<HttpClientConfig>,
+    services: Data<Services>,
+    pvid: web::Path<(String,)>,
+) -> Result<HttpResponse, ExploreError> {
+    let cryptogram = JsonCryptogram {
+        steps: vec![JsonCryptogramStep {
+            service: ServiceName::Catalog,
+            method: MethodName::Lookup,
+            payload: json!({ "product_variant_ids": [pvid.0] }),
+            postflight: Some(Language::Object(vec![(
+                String::from("results"),
+                Language::At(String::from("product_variants")),
+            )])),
+        }],
+    };
+
+    let live_client = LiveJsonClient::build(client_config.get_ref());
+
+    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
+        .await
+        .map_err(ExploreError::Evaluate)?;
+
+    let results = result
+        .get("results")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .and_then(|i| i.get("primary_image"))
+        .and_then(|s| s.as_str());
+
+    match results {
+        Some(primary_image) => Ok(HttpResponse::TemporaryRedirect()
+            .append_header(("location", primary_image))
+            .finish()),
+        _ => Ok(HttpResponse::NotFound().finish()),
+    }
+}
+
 async fn get_product_variants(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -288,5 +326,11 @@ pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
         .route(
             "/product_variants",
             host_route().guard(guard::Get()).to(get_product_variants),
+        )
+        .route(
+            "/product_variants/{pvid}.jpg",
+            host_route()
+                .guard(guard::Get())
+                .to(get_product_variant_image),
         );
 }
