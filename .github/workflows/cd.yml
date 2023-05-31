@@ -89,6 +89,6 @@ jobs:
     with:
       organization_slug: appreciate-stuff
       route            : releases/delegator-${{ inputs.image_tag }}/deploys/
-      curl_args        : -d '{"environment":"${{ inputs.environment }}"}'
+      curl_args        : -d '{"environment":"${{ inputs.environment || 'stag' }}"}'
     secrets:
       SENTRY_BEARER_TOKEN: ${{ secrets.SENTRY_BEARER_TOKEN }}
