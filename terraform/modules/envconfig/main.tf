@@ -348,7 +348,7 @@ locals {
 }
 
 module "ecs_service" {
-  source = "github.com/Appreciate-Stuff/appr-tfmod-ecs-service?ref=v0.1.0"
+  source = "github.com/Appreciate-Stuff/appr-tfmod-ecs-service?ref=v0.1.1"
 
   enable          = "true"
   name            = local.component
