@@ -23,6 +23,8 @@ pub struct Virtualhosts {
 
 #[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
 pub enum MethodName {
+    #[serde(alias = "autocomplete")]
+    Autocomplete,
     #[serde(alias = "explore")]
     Explore,
     #[serde(alias = "search")]
