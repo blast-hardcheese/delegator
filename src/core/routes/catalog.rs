@@ -5,7 +5,7 @@ use std::num::ParseIntError;
 use actix_web::{
     body::BoxBody,
     error, guard,
-    web::{self, Data},
+    web::{self, Data, Json},
     HttpResponse,
 };
 use serde::Deserialize;
@@ -319,10 +319,40 @@ async fn get_explore(
     Ok(HttpResponse::Ok().json(&result))
 }
 
+#[derive(Debug, Deserialize)]
+struct SuggestionsRequest {
+    q: String,
+}
+
+async fn post_suggestions(
+    client_config: Data<HttpClientConfig>,
+    services: Data<Services>,
+    req: Json<SuggestionsRequest>,
+) -> Result<HttpResponse, ExploreError> {
+    let cryptogram = JsonCryptogram {
+        steps: vec![
+            JsonCryptogramStep {
+                service: ServiceName::Catalog,
+                method: MethodName::Autocomplete,
+                payload: json!({ "q": req.q }),
+                postflight: None,
+            },
+        ],
+    };
+
+    let live_client = LiveJsonClient::build(client_config.get_ref());
+
+    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
+        .await
+        .map_err(ExploreError::Evaluate)?;
+    Ok(HttpResponse::Ok().json(&result))
+}
+
 pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
     let host_route = || web::route().guard(guard::Host(hostname.clone()));
     server
         .route("/explore", host_route().guard(guard::Get()).to(get_explore))
+        .route("/explore/suggestions", host_route().guard(guard::Post()).to(post_suggestions))
         .route(
             "/product_variants",
             host_route().guard(guard::Get()).to(get_product_variants),
