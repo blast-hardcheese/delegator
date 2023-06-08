@@ -85,6 +85,7 @@ jobs:
   sentry-deploy:
     uses: Appreciate-Stuff/appreciate-actions/.github/workflows/sentry-api.yml@3e6542ca598cef504da493963458f9173f91f68c  # v1.0.1
     needs:
+      - docker-build-push
       - call-deploy-to-env
     with:
       organization_slug: appreciate-stuff
