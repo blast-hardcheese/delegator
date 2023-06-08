@@ -49,7 +49,7 @@ jobs:
       - deploy
     with:
       organization_slug: appreciate-stuff
-      route            : releases/delegator-${{ inputs.image_tag }}/deploys/
+      route            : releases/delegator@${{ inputs.image_tag }}/deploys/
       curl_args        : -d '{"environment":"${{ inputs.environment }}"}'
     secrets:
       SENTRY_BEARER_TOKEN: ${{ secrets.SENTRY_BEARER_TOKEN }}
