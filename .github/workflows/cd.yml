@@ -1,4 +1,6 @@
 name: CD
+run-name: |  # By golly, GitHub Actions syntax sure is wacky.
+  ${{ inputs.environment && inputs.environment || 'stag' }}: ${{ github.ref_name }}${{ inputs.environment && ' by @' || '' }}${{ inputs.environment && github.actor || '' }}
 
 on:
   push:
