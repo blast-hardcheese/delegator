@@ -1,4 +1,6 @@
 name: Deploy Service
+run-name: |
+  ${{ inputs.environment }}${{ inputs.apply && ': ' || ' (Dry run): ' }}${{ inputs.image_tag }}
 
 on:
   workflow_dispatch:
