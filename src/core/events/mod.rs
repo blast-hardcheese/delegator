@@ -1,6 +1,8 @@
 use log::debug;
 use serde_json::Value;
 
+use crate::translate::EventTopic;
+
 pub type ActionContext = Value;
 pub type PageContext = Value;
 
@@ -22,11 +24,15 @@ impl EventClient {
     }
 
     pub fn emit(
-        self,
+        &self,
+        topic: &EventTopic,
         event: &ActionContext,
         page_context: &PageContext,
     ) -> Result<(), EventEmissionError> {
-        debug!("EventClient.emit({:?}, {:?})", event, page_context);
+        debug!(
+            "EventClient.emit({:?}, {:?}, {:?})",
+            topic, event, page_context
+        );
 
         Ok(())
     }

@@ -3,7 +3,8 @@ use std::io::{Error, ErrorKind, Result};
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use delegator_core::config::{
-    Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation, Services,
+    events::EventConfig, Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation,
+    Services,
 };
 
 enum InitErrors {
@@ -38,6 +39,7 @@ async fn main() -> Result<()> {
     let Configuration {
         authorities,
         environment,
+        events,
         http,
         sentry,
         mut services,
@@ -106,6 +108,7 @@ async fn main() -> Result<()> {
             .wrap(Logger::default().log_target("accesslog"))
             .wrap(cors)
             .wrap(sentry_actix::Sentry::new())
+            .app_data::<Data<EventConfig>>(Data::new(events.clone()))
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
             .configure(|server| delegator_core::routes::configure(server, &virtualhosts))

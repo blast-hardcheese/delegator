@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
 
-type EventTopic = String;
+pub type EventTopic = String;
 
 pub struct TranslateContext {
     client: Option<Arc<EventClient>>,
