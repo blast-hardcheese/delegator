@@ -27,6 +27,7 @@ pub struct JsonCryptogramStep {
     pub service: ServiceName,
     pub method: MethodName,
     pub payload: Value,
+    pub preflight: Option<Language>,
     pub postflight: Option<Language>,
 }
 
@@ -48,6 +49,7 @@ impl JsonCryptogramStepNeedsPayload {
                 service: self.service,
                 method: self.method,
                 payload,
+                preflight: None,
                 postflight: None,
             },
         }
@@ -59,6 +61,15 @@ pub struct JsonCryptogramStepBuilder {
 }
 
 impl JsonCryptogramStepBuilder {
+    pub fn preflight(self, preflight: Language) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                preflight: Some(preflight),
+                ..self.inner
+            },
+        }
+    }
+
     pub fn postflight(self, postflight: Language) -> JsonCryptogramStepBuilder {
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
@@ -350,6 +361,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
+        let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
 
         let service = services
@@ -382,8 +394,15 @@ pub async fn do_evaluate<JC: JsonClient>(
                     ..Breadcrumb::default()
                 });
 
+                let outgoing_payload = if let Some(pf) = preflight {
+                    translate::step(pf, payload, translator_state.clone())
+                        .map_err(EvaluateError::InvalidStructure)?
+                } else {
+                    payload.clone()
+                };
+
                 let result = json_client
-                    .issue_request(method.method.clone(), uri, payload)
+                    .issue_request(method.method.clone(), uri, &outgoing_payload)
                     .await?;
 
                 let new_payload = if let Some(pf) = postflight {
