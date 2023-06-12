@@ -10,45 +10,34 @@ env:
   GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
 
 jobs:
-  lint-build:
-    name: Lint, Build, and Test
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@702581b456499eb972f07b093b325f5efaa7dbfd  # v0.1.1
-    with:
-      image_name: delegator
-      build_args: |
-        RUST_STAGE=debug
-    secrets:
-      AWS_ACCESS_KEY_ID    : ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
   clippy:
     name: clippy
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9  # v3.5.3
 
       - name: Install rust stable
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af  # v1.0.7
         with:
           toolchain: stable
           override: true
           components: clippy
 
       - name: Set up build cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@988c164c3d0e93c4dbab36aaf5bbeb77425b2894  # v2.4.0
 
       - name: Check workflow permissions
         id: check_permissions
-        uses: scherermichael-oss/action-has-permission@1.0.6
+        uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3  # v1.0.6
         with:
           required-permission: write
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run clippy check
-        uses: actions-rs/clippy-check@v1
+        uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d  # v1.0.7
         if: steps.check_permissions.outputs.has-permission
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -87,7 +76,7 @@ jobs:
 #          command: tarpaulin
 
   check-terraform:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@72e9d028074d15065fc5830e34532a1b06a25df7 # v1.0.0
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
     if: github.secret_source == 'Actions'  # Dependabot has no access to AWS_*
     with:
       environment: stag
