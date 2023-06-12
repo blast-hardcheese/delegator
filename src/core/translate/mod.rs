@@ -22,6 +22,7 @@ pub enum Language {
     Set(String),                     // ... | set("foo")
     Get(String),                     // get("bar") | ...
     Const(Value),                    // const(...)
+    Identity,
 }
 
 #[derive(Debug)]
@@ -131,6 +132,7 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
             Ok((**needle).clone())
         }
         Language::Const(value) => Ok(value.clone()),
+        Language::Identity => Ok(current.clone()),
     }
 }
 
