@@ -92,15 +92,15 @@ async fn get_product_variant_image(
     pvid: web::Path<(String,)>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: ServiceName::Catalog,
-            method: MethodName::Lookup,
-            payload: json!({ "product_variant_ids": [pvid.0] }),
-            postflight: Some(Language::Object(vec![(
-                String::from("results"),
-                Language::At(String::from("product_variants")),
-            )])),
-        }],
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!({ "product_variant_ids": [pvid.0] }))
+                .postflight(Language::Object(vec![(
+                    String::from("results"),
+                    Language::At(String::from("product_variants")),
+                )]))
+                .finish(),
+        ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
@@ -146,15 +146,15 @@ async fn get_product_variants(
     };
 
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: ServiceName::Catalog,
-            method: MethodName::Lookup,
-            payload: json!({ "product_variant_ids": ids }),
-            postflight: Some(Language::Object(vec![(
-                String::from("results"),
-                Language::At(String::from("product_variants")),
-            )])),
-        }],
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!({ "product_variant_ids": ids }))
+                .postflight(Language::Object(vec![(
+                    String::from("results"),
+                    Language::At(String::from("product_variants")),
+                )]))
+                .finish(),
+        ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
@@ -203,15 +203,13 @@ async fn get_explore(
     };
 
     let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
-        let source = JsonCryptogramStep {
-            service: ServiceName::Recommendations,
-            method: MethodName::Lookup,
-            payload: json!({ "size": size, "owner_id": owner_id.unwrap() }),
-            postflight: Some(Language::Object(vec![(
+        let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
+            .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
+            .postflight(Language::Object(vec![(
                 String::from("ids"),
                 Language::At(String::from("results")),
-            )])),
-        };
+            )]))
+            .finish();
         let next_start = format!("catalog:{}", size);
         (
             source,
@@ -229,11 +227,11 @@ async fn get_explore(
         } else {
             start
         };
-        let source = JsonCryptogramStep {
-            service: ServiceName::Catalog,
-            method: MethodName::Explore,
-            payload: json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
-            postflight: Some(Language::Splat(vec![
+        let source = JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+            .payload(
+                json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
+            )
+            .postflight(Language::Splat(vec![
                 Language::Focus(
                     String::from("next_start"),
                     Box::new(Language::Set(String::from("next_start"))),
@@ -246,8 +244,8 @@ async fn get_explore(
                     String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
                 )]),
-            ])),
-        };
+            ]))
+            .finish();
         (
             source,
             vec![
@@ -266,11 +264,9 @@ async fn get_explore(
     let cryptogram = JsonCryptogram {
         steps: vec![
             source,
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Lookup,
-                payload: json!({ "product_variant_ids": [] }),
-                postflight: Some(Language::Object(
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!({ "product_variant_ids": [] }))
+                .postflight(Language::Object(
                     vec![
                         vec![
                             (
@@ -306,8 +302,8 @@ async fn get_explore(
                         next_start,
                     ]
                     .concat(),
-                )),
-            },
+                ))
+                .finish(),
         ],
     };
 
@@ -331,12 +327,9 @@ async fn post_suggestions(
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Autocomplete,
-                payload: json!({ "q": req.q }),
-                postflight: None,
-            },
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Autocomplete)
+                .payload(json!({ "q": req.q }))
+                .finish(),
         ],
     };
 
@@ -352,7 +345,10 @@ pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
     let host_route = || web::route().guard(guard::Host(hostname.clone()));
     server
         .route("/explore", host_route().guard(guard::Get()).to(get_explore))
-        .route("/explore/suggestions", host_route().guard(guard::Post()).to(post_suggestions))
+        .route(
+            "/explore/suggestions",
+            host_route().guard(guard::Post()).to(post_suggestions),
+        )
         .route(
             "/product_variants",
             host_route().guard(guard::Get()).to(get_product_variants),

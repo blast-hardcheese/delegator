@@ -30,6 +30,49 @@ pub struct JsonCryptogramStep {
     pub postflight: Option<Language>,
 }
 
+impl JsonCryptogramStep {
+    pub fn build(service: ServiceName, method: MethodName) -> JsonCryptogramStepNeedsPayload {
+        JsonCryptogramStepNeedsPayload { service, method }
+    }
+}
+
+pub struct JsonCryptogramStepNeedsPayload {
+    service: ServiceName,
+    method: MethodName,
+}
+
+impl JsonCryptogramStepNeedsPayload {
+    pub fn payload(self, payload: Value) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                service: self.service,
+                method: self.method,
+                payload,
+                postflight: None,
+            },
+        }
+    }
+}
+
+pub struct JsonCryptogramStepBuilder {
+    inner: JsonCryptogramStep,
+}
+
+impl JsonCryptogramStepBuilder {
+    pub fn postflight(self, postflight: Language) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                postflight: Some(postflight),
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn finish(self) -> JsonCryptogramStep {
+        self.inner
+    }
+}
+
 impl fmt::Display for EvaluateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -380,11 +423,9 @@ async fn routes_evaluate() {
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Search,
-                payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
-                postflight: Some(Language::Focus(
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Search)
+                .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
+                .postflight(Language::Focus(
                     String::from("results"),
                     Box::new(Language::Object(vec![
                         (
@@ -400,17 +441,16 @@ async fn routes_evaluate() {
                             ),
                         ),
                     ])),
-                )),
-            },
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Lookup,
-                payload: json!(null),
-                postflight: Some(Language::Object(vec![(
+                ))
+                .finish()
+            ,
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!(null))
+                .postflight(Language::Object(vec![(
                     String::from("results"),
                     Language::At(String::from("results")),
-                )])),
-            },
+                )]))
+                .finish(),
         ],
     };
 

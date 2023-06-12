@@ -54,12 +54,11 @@ async fn post_resale_price(
     req: Json<PostResalePrice>,
 ) -> Result<HttpResponse, PricingError> {
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: ServiceName::Pricing,
-            method: MethodName::Lookup,
-            payload: json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }),
-            postflight: None,
-        }],
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Pricing, MethodName::Lookup)
+            .payload(json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }))
+            .finish()
+        ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
