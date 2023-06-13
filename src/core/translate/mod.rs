@@ -1,6 +1,7 @@
 pub mod deserialize;
 pub mod parse;
 
+use crate::config::events::EventTopic;
 use crate::events::{EventClient, PageContext};
 
 use std::borrow::{Borrow, BorrowMut};
@@ -9,8 +10,6 @@ use std::sync::{Arc, Mutex};
 
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
-
-pub type EventTopic = String;
 
 pub struct TranslateContext {
     client: Option<Arc<EventClient>>,
