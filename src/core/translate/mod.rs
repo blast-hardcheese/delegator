@@ -19,6 +19,12 @@ impl TranslateContext {
     pub fn noop() -> TranslateContext {
         TranslateContext { client: None }
     }
+
+    pub fn build(client: Arc<EventClient>) -> TranslateContext {
+        TranslateContext {
+            client: Some(client),
+        }
+    }
 }
 
 // translate
