@@ -1,6 +1,8 @@
 pub mod deserialize;
 pub mod parse;
 
+use crate::events::{EventClient, PageContext};
+
 use std::borrow::{Borrow, BorrowMut};
 use std::fmt::Display;
 use std::sync::{Arc, Mutex};
@@ -8,11 +10,15 @@ use std::sync::{Arc, Mutex};
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
 
-pub struct TranslateContext;
+type EventTopic = String;
+
+pub struct TranslateContext {
+    client: Option<Arc<EventClient>>,
+}
 
 impl TranslateContext {
     pub fn noop() -> TranslateContext {
-        TranslateContext {}
+        TranslateContext { client: None }
     }
 }
 
@@ -31,6 +37,7 @@ pub enum Language {
     Get(String),                     // get("bar") | ...
     Const(Value),                    // const(...)
     Identity,
+    EmitEvent(EventTopic, PageContext),
 }
 
 #[derive(Debug)]
@@ -147,6 +154,12 @@ pub fn step(
         }
         Language::Const(value) => Ok(value.clone()),
         Language::Identity => Ok(current.clone()),
+        Language::EmitEvent(topic, page_context) => {
+            if let Some(client) = &ctx.client {
+                client.emit(topic, current, page_context);
+            }
+            Ok(current.clone())
+        }
     }
 }
 
