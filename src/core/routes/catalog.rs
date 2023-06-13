@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::{
-    config::{HttpClientConfig, MethodName, ServiceName, Services},
+    config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
     headers::authorization::Authorization,
     headers::{authorization::BearerFields, features::Features},
     translate::{make_state, Language},
@@ -168,6 +168,7 @@ async fn get_product_variants(
 async fn get_explore(
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
+    events: Data<EventConfig>,
     req: web::Query<ExploreRequest>,
     features: Option<Features>,
     authorization: Option<Authorization>,
@@ -231,6 +232,7 @@ async fn get_explore(
             .payload(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
+            .preflight(Language::EmitEvent(events.user_action.clone(), json!(null)))
             .postflight(Language::Splat(vec![
                 Language::Focus(
                     String::from("next_start"),
