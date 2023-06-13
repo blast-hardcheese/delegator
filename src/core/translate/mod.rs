@@ -8,6 +8,14 @@ use std::sync::{Arc, Mutex};
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
 
+pub struct TranslateContext;
+
+impl TranslateContext {
+    pub fn noop() -> TranslateContext {
+        TranslateContext {}
+    }
+}
+
 // translate
 //
 // A poor man's jq.
@@ -66,7 +74,12 @@ pub fn make_state() -> State {
     Arc::new(Mutex::new(HashMap::new()))
 }
 
-pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, StepError> {
+pub fn step(
+    ctx: &TranslateContext,
+    prog: &Language,
+    current: &Value,
+    state: State,
+) -> Result<Value, StepError> {
     match prog {
         Language::At(key) => Ok(current
             .get(key)
@@ -78,6 +91,7 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
             })?
             .clone()),
         Language::Focus(key, next) => step(
+            ctx,
             next,
             current.get(key).ok_or_else(|| StepError {
                 history: vec![key.clone()],
@@ -95,7 +109,7 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
                 .iter()
                 .enumerate()
                 .map(|(i, x)| {
-                    step(next, x, state.clone())
+                    step(ctx, next, x, state.clone())
                         .map_err(|se| se.prepend_history(format!("[{}]", i)))
                 })
                 .collect::<Result<Vec<Value>, StepError>>()?,
@@ -103,13 +117,13 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
         Language::Object(pairs) => Ok(Value::Object(
             pairs
                 .iter()
-                .map(|(k, v)| step(v, current, state.clone()).map(|v| (k.clone(), v)))
+                .map(|(k, v)| step(ctx, v, current, state.clone()).map(|v| (k.clone(), v)))
                 .collect::<Result<Map<String, Value>, StepError>>()?,
         )),
         Language::Splat(each) => {
             let result = each
                 .iter()
-                .map(|next| step(next, current, state.clone()))
+                .map(|next| step(ctx, next, current, state.clone()))
                 .collect::<Result<Vec<Value>, StepError>>()?;
             Ok(result.last().unwrap().clone())
         }
@@ -138,6 +152,7 @@ pub fn step(prog: &Language, current: &Value, state: State) -> Result<Value, Ste
 
 #[test]
 fn translate_error_at() {
+    let ctx = TranslateContext::noop();
     use serde_json::json;
     let prog = Language::At(String::from("foo"));
 
@@ -145,7 +160,7 @@ fn translate_error_at() {
     if let Some(StepError {
         choices: _,
         history,
-    }) = step(&prog, &given, make_state()).err()
+    }) = step(&ctx, &prog, &given, make_state()).err()
     {
         assert_eq!(history, vec!["foo"]);
     }
@@ -153,6 +168,7 @@ fn translate_error_at() {
 
 #[test]
 fn translate_error_array() {
+    let ctx = TranslateContext::noop();
     use serde_json::json;
     let prog = Language::Array(Box::new(Language::At(String::from("foo"))));
 
@@ -160,7 +176,7 @@ fn translate_error_array() {
     if let Some(StepError {
         choices: _,
         history,
-    }) = step(&prog, &given, make_state()).err()
+    }) = step(&ctx, &prog, &given, make_state()).err()
     {
         assert_eq!(history, vec!["[0]", "foo"]);
     }
@@ -168,6 +184,7 @@ fn translate_error_array() {
 
 #[test]
 fn translate_error_focus() {
+    let ctx = TranslateContext::noop();
     use serde_json::json;
     let prog = Language::Focus(
         String::from("foo"),
@@ -178,7 +195,7 @@ fn translate_error_focus() {
     if let Some(StepError {
         choices: _,
         history,
-    }) = step(&prog, &given, make_state()).err()
+    }) = step(&ctx, &prog, &given, make_state()).err()
     {
         assert_eq!(history, vec!["foo"]);
     }
@@ -186,6 +203,7 @@ fn translate_error_focus() {
 
 #[test]
 fn translate_error_object() {
+    let ctx = TranslateContext::noop();
     use serde_json::json;
     let prog = Language::Object(vec![
         (String::from("foo"), Language::At(String::from("foo"))),
@@ -196,7 +214,7 @@ fn translate_error_object() {
     if let Some(StepError {
         choices: _,
         history,
-    }) = step(&prog, &given, make_state()).err()
+    }) = step(&ctx, &prog, &given, make_state()).err()
     {
         assert_eq!(history, vec!["bar"]);
     }
@@ -204,6 +222,7 @@ fn translate_error_object() {
 
 #[test]
 fn translate_test() {
+    let ctx = TranslateContext::noop();
     use serde_json::json;
     let prog = Language::Focus(
         String::from("results"),
@@ -216,5 +235,5 @@ fn translate_test() {
     let given = json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] });
     let expected = json!({ "ids": [ "12313bb7-6068-4ec9-ac49-3e834181f127" ] });
 
-    assert_eq!(step(&prog, &given, make_state()).unwrap(), expected);
+    assert_eq!(step(&ctx, &prog, &given, make_state()).unwrap(), expected);
 }
