@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::make_state,
+    translate::{make_state, TranslateContext},
 };
 
 use super::{
@@ -49,6 +49,7 @@ struct PostResalePrice {
 }
 
 async fn post_resale_price(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     req: Json<PostResalePrice>,
@@ -63,9 +64,15 @@ async fn post_resale_price(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(PricingError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(PricingError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 

@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
 
+#[derive(Clone)]
 pub struct TranslateContext {
     client: Option<Arc<EventClient>>,
 }

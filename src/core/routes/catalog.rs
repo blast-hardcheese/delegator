@@ -15,7 +15,7 @@ use crate::{
     config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
     headers::authorization::Authorization,
     headers::{authorization::BearerFields, features::Features},
-    translate::{make_state, Language},
+    translate::{make_state, Language, TranslateContext},
 };
 
 use super::{
@@ -87,6 +87,7 @@ impl error::ResponseError for ExploreError {
 }
 
 async fn get_product_variant_image(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     pvid: web::Path<(String,)>,
@@ -105,9 +106,15 @@ async fn get_product_variant_image(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
 
     let results = result
         .get("results")
@@ -125,6 +132,7 @@ async fn get_product_variant_image(
 }
 
 async fn get_product_variants(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     raw_req: web::Query<Vec<(String, String)>>,
@@ -159,13 +167,20 @@ async fn get_product_variants(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
 async fn get_explore(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     events: Data<EventConfig>,
@@ -311,9 +326,15 @@ async fn get_explore(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -323,6 +344,7 @@ struct SuggestionsRequest {
 }
 
 async fn post_suggestions(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     req: Json<SuggestionsRequest>,
@@ -337,9 +359,15 @@ async fn post_suggestions(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 

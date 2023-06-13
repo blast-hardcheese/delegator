@@ -236,6 +236,7 @@ impl ResponseError for EvaluateError {
 }
 
 async fn evaluate(
+    ctx: Data<TranslateContext>,
     cryptogram: Json<JsonCryptogram>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -243,6 +244,7 @@ async fn evaluate(
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(
+        ctx.get_ref(),
         cryptogram.into_inner(),
         live_client,
         services.get_ref(),
@@ -333,13 +335,12 @@ impl JsonClient for TestJsonClient {
 }
 
 pub async fn do_evaluate<JC: JsonClient>(
+    ctx: &TranslateContext,
     cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
     translator_state: translate::State,
 ) -> Result<Value, EvaluateError> {
-    let ctx = TranslateContext::noop();
-
     let parent_span = sentry::configure_scope(|scope| scope.get_span());
 
     let span: sentry::TransactionOrSpan = match &parent_span {
@@ -397,7 +398,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                 });
 
                 let outgoing_payload = if let Some(pf) = preflight {
-                    translate::step(&ctx, pf, payload, translator_state.clone())
+                    translate::step(ctx, pf, payload, translator_state.clone())
                         .map_err(EvaluateError::InvalidStructure)?
                 } else {
                     payload.clone()
@@ -408,7 +409,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                     .await?;
 
                 let new_payload = if let Some(pf) = postflight {
-                    translate::step(&ctx, pf, &result, translator_state.clone())
+                    translate::step(ctx, pf, &result, translator_state.clone())
                         .map_err(EvaluateError::InvalidStructure)?
                 } else {
                     result
