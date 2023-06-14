@@ -261,6 +261,24 @@ resource "aws_route53_record" "internal" {
 }
 
 #-------------------------------------------------------------------
+# User Actions - SQS
+#-------------------------------------------------------------------
+
+module "user_actions_queue" {
+  source = "github.com/Appreciate-Stuff/appr-tfmod-state-core?ref=v0.1.3"
+
+  service_path = "data/queues/user_actions"
+  aws_region   = local.aws_region
+  environment  = local.env
+}
+
+# This attaches the policy to our ECS role so that the apex service can access the queue
+resource "aws_iam_role_policy_attachment" "user_actions_allow_sqs_queue_access" {
+  role       = module.ecs_service.task_role_name
+  policy_arn = module.user_actions_queue.service_state.full_access_policy.arn
+}
+
+#-------------------------------------------------------------------
 # Service
 #-------------------------------------------------------------------
 
@@ -376,6 +394,7 @@ module "ecs_service" {
       secrets_json       = jsonencode(local.secrets)
       cpu                = local.autoscaling_params[local.env].cpu
       memory             = local.autoscaling_params[local.env].memory
+      user_actions_url   = module.user_actions_queue.service_state.sqs_queue.id
 
       init_process_enabled_json = jsonencode(local.enable_ecs_exec)
     }

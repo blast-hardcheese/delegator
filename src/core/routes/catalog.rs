@@ -12,10 +12,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::{
-    config::{HttpClientConfig, MethodName, ServiceName, Services},
+    config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
     headers::authorization::Authorization,
     headers::{authorization::BearerFields, features::Features},
-    translate::{make_state, Language},
+    translate::{make_state, Language, TranslateContext},
 };
 
 use super::{
@@ -87,27 +87,34 @@ impl error::ResponseError for ExploreError {
 }
 
 async fn get_product_variant_image(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     pvid: web::Path<(String,)>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: ServiceName::Catalog,
-            method: MethodName::Lookup,
-            payload: json!({ "product_variant_ids": [pvid.0] }),
-            postflight: Some(Language::Object(vec![(
-                String::from("results"),
-                Language::At(String::from("product_variants")),
-            )])),
-        }],
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!({ "product_variant_ids": [pvid.0] }))
+                .postflight(Language::Object(vec![(
+                    String::from("results"),
+                    Language::At(String::from("product_variants")),
+                )]))
+                .finish(),
+        ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
 
     let results = result
         .get("results")
@@ -125,6 +132,7 @@ async fn get_product_variant_image(
 }
 
 async fn get_product_variants(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     raw_req: web::Query<Vec<(String, String)>>,
@@ -146,28 +154,36 @@ async fn get_product_variants(
     };
 
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: ServiceName::Catalog,
-            method: MethodName::Lookup,
-            payload: json!({ "product_variant_ids": ids }),
-            postflight: Some(Language::Object(vec![(
-                String::from("results"),
-                Language::At(String::from("product_variants")),
-            )])),
-        }],
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!({ "product_variant_ids": ids }))
+                .postflight(Language::Object(vec![(
+                    String::from("results"),
+                    Language::At(String::from("product_variants")),
+                )]))
+                .finish(),
+        ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
 async fn get_explore(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
+    events: Data<EventConfig>,
     req: web::Query<ExploreRequest>,
     features: Option<Features>,
     authorization: Option<Authorization>,
@@ -203,15 +219,13 @@ async fn get_explore(
     };
 
     let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
-        let source = JsonCryptogramStep {
-            service: ServiceName::Recommendations,
-            method: MethodName::Lookup,
-            payload: json!({ "size": size, "owner_id": owner_id.unwrap() }),
-            postflight: Some(Language::Object(vec![(
+        let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
+            .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
+            .postflight(Language::Object(vec![(
                 String::from("ids"),
                 Language::At(String::from("results")),
-            )])),
-        };
+            )]))
+            .finish();
         let next_start = format!("catalog:{}", size);
         (
             source,
@@ -229,11 +243,12 @@ async fn get_explore(
         } else {
             start
         };
-        let source = JsonCryptogramStep {
-            service: ServiceName::Catalog,
-            method: MethodName::Explore,
-            payload: json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
-            postflight: Some(Language::Splat(vec![
+        let source = JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+            .payload(
+                json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
+            )
+            .preflight(Language::EmitEvent(events.user_action.clone(), json!(null)))
+            .postflight(Language::Splat(vec![
                 Language::Focus(
                     String::from("next_start"),
                     Box::new(Language::Set(String::from("next_start"))),
@@ -246,8 +261,8 @@ async fn get_explore(
                     String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
                 )]),
-            ])),
-        };
+            ]))
+            .finish();
         (
             source,
             vec![
@@ -266,11 +281,9 @@ async fn get_explore(
     let cryptogram = JsonCryptogram {
         steps: vec![
             source,
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Lookup,
-                payload: json!({ "product_variant_ids": [] }),
-                postflight: Some(Language::Object(
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!({ "product_variant_ids": [] }))
+                .postflight(Language::Object(
                     vec![
                         vec![
                             (
@@ -306,16 +319,22 @@ async fn get_explore(
                         next_start,
                     ]
                     .concat(),
-                )),
-            },
+                ))
+                .finish(),
         ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -325,26 +344,30 @@ struct SuggestionsRequest {
 }
 
 async fn post_suggestions(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     req: Json<SuggestionsRequest>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Autocomplete,
-                payload: json!({ "q": req.q }),
-                postflight: None,
-            },
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Autocomplete)
+                .payload(json!({ "q": req.q }))
+                .finish(),
         ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(ExploreError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -352,7 +375,10 @@ pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
     let host_route = || web::route().guard(guard::Host(hostname.clone()));
     server
         .route("/explore", host_route().guard(guard::Get()).to(get_explore))
-        .route("/explore/suggestions", host_route().guard(guard::Post()).to(post_suggestions))
+        .route(
+            "/explore/suggestions",
+            host_route().guard(guard::Post()).to(post_suggestions),
+        )
         .route(
             "/product_variants",
             host_route().guard(guard::Get()).to(get_product_variants),

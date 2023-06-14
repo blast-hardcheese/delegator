@@ -17,7 +17,7 @@ use std::{fmt, str::Utf8Error};
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
-    translate::{self, make_state, Language, StepError},
+    translate::{self, make_state, Language, StepError, TranslateContext},
 };
 
 use super::errors::{json_error_response, JsonResponseError};
@@ -27,7 +27,61 @@ pub struct JsonCryptogramStep {
     pub service: ServiceName,
     pub method: MethodName,
     pub payload: Value,
+    pub preflight: Option<Language>,
     pub postflight: Option<Language>,
+}
+
+impl JsonCryptogramStep {
+    pub fn build(service: ServiceName, method: MethodName) -> JsonCryptogramStepNeedsPayload {
+        JsonCryptogramStepNeedsPayload { service, method }
+    }
+}
+
+pub struct JsonCryptogramStepNeedsPayload {
+    service: ServiceName,
+    method: MethodName,
+}
+
+impl JsonCryptogramStepNeedsPayload {
+    pub fn payload(self, payload: Value) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                service: self.service,
+                method: self.method,
+                payload,
+                preflight: None,
+                postflight: None,
+            },
+        }
+    }
+}
+
+pub struct JsonCryptogramStepBuilder {
+    inner: JsonCryptogramStep,
+}
+
+impl JsonCryptogramStepBuilder {
+    pub fn preflight(self, preflight: Language) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                preflight: Some(preflight),
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn postflight(self, postflight: Language) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                postflight: Some(postflight),
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn finish(self) -> JsonCryptogramStep {
+        self.inner
+    }
 }
 
 impl fmt::Display for EvaluateError {
@@ -182,6 +236,7 @@ impl ResponseError for EvaluateError {
 }
 
 async fn evaluate(
+    ctx: Data<TranslateContext>,
     cryptogram: Json<JsonCryptogram>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -189,6 +244,7 @@ async fn evaluate(
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(
+        ctx.get_ref(),
         cryptogram.into_inner(),
         live_client,
         services.get_ref(),
@@ -279,6 +335,7 @@ impl JsonClient for TestJsonClient {
 }
 
 pub async fn do_evaluate<JC: JsonClient>(
+    ctx: &TranslateContext,
     cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
@@ -307,6 +364,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
+        let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
 
         let service = services
@@ -339,12 +397,19 @@ pub async fn do_evaluate<JC: JsonClient>(
                     ..Breadcrumb::default()
                 });
 
+                let outgoing_payload = if let Some(pf) = preflight {
+                    translate::step(ctx, pf, payload, translator_state.clone())
+                        .map_err(EvaluateError::InvalidStructure)?
+                } else {
+                    payload.clone()
+                };
+
                 let result = json_client
-                    .issue_request(method.method.clone(), uri, payload)
+                    .issue_request(method.method.clone(), uri, &outgoing_payload)
                     .await?;
 
                 let new_payload = if let Some(pf) = postflight {
-                    translate::step(pf, &result, translator_state.clone())
+                    translate::step(ctx, pf, &result, translator_state.clone())
                         .map_err(EvaluateError::InvalidStructure)?
                 } else {
                     result
@@ -380,11 +445,9 @@ async fn routes_evaluate() {
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Search,
-                payload: json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }),
-                postflight: Some(Language::Focus(
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Search)
+                .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
+                .postflight(Language::Focus(
                     String::from("results"),
                     Box::new(Language::Object(vec![
                         (
@@ -400,17 +463,16 @@ async fn routes_evaluate() {
                             ),
                         ),
                     ])),
-                )),
-            },
-            JsonCryptogramStep {
-                service: ServiceName::Catalog,
-                method: MethodName::Lookup,
-                payload: json!(null),
-                postflight: Some(Language::Object(vec![(
+                ))
+                .finish()
+            ,
+            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                .payload(json!(null))
+                .postflight(Language::Object(vec![(
                     String::from("results"),
                     Language::At(String::from("results")),
-                )])),
-            },
+                )]))
+                .finish(),
         ],
     };
 

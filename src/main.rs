@@ -1,9 +1,17 @@
-use std::io::{Error, ErrorKind, Result};
+use std::{
+    io::{Error, ErrorKind, Result},
+    sync::Arc,
+};
 
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
-use delegator_core::config::{
-    Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation, Services,
+use delegator_core::{
+    config::{
+        events::EventConfig, Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation,
+        Services,
+    },
+    events::EventClient,
+    translate::TranslateContext,
 };
 
 enum InitErrors {
@@ -38,6 +46,7 @@ async fn main() -> Result<()> {
     let Configuration {
         authorities,
         environment,
+        events,
         http,
         sentry,
         mut services,
@@ -85,6 +94,13 @@ async fn main() -> Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     println!("Preparing to bind to {}:{}", http.host, http.port);
 
+    let event_client = {
+        let client = EventClient::new().await;
+        Arc::new(client)
+    };
+
+    let ctx = TranslateContext::build(event_client);
+
     HttpServer::new(move || {
         // let allowed_origins = http.cors.clone();
         let cors = Cors::default()
@@ -106,8 +122,10 @@ async fn main() -> Result<()> {
             .wrap(Logger::default().log_target("accesslog"))
             .wrap(cors)
             .wrap(sentry_actix::Sentry::new())
+            .app_data::<Data<EventConfig>>(Data::new(events.clone()))
             .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
             .app_data::<Data<Services>>(Data::new(services.clone()))
+            .app_data::<Data<TranslateContext>>(Data::new(ctx.clone()))
             .configure(|server| delegator_core::routes::configure(server, &virtualhosts))
     })
     .bind((http.host, http.port))?

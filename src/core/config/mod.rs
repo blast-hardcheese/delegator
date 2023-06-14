@@ -1,3 +1,4 @@
+pub mod events;
 pub mod http_method;
 pub mod path_and_query;
 pub mod scheme;
@@ -14,6 +15,8 @@ use hashbrown::HashMap;
 
 use hocon::{Error, HoconLoader};
 use serde::Deserialize;
+
+use self::events::EventConfig;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Virtualhosts {
@@ -112,6 +115,7 @@ pub struct Configuration {
     pub sentry: SentryConfig,
     pub services: Services,
     pub virtualhosts: Virtualhosts,
+    pub events: EventConfig,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, Error> {

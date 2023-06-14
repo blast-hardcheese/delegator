@@ -24,6 +24,10 @@
         {
           "name": "SENTRY_RELEASE",
           "value": "${ name }-${ image_tag }"
+        },
+        {
+          "name": "USER_ACTIONS_SQS_URL",
+          "value": "${user_actions_url}"
         }
       ],
       "secrets": ${ secrets_json },

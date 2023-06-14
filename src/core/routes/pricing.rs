@@ -11,7 +11,7 @@ use serde_json::json;
 
 use crate::{
     config::{HttpClientConfig, MethodName, ServiceName, Services},
-    translate::make_state,
+    translate::{make_state, TranslateContext},
 };
 
 use super::{
@@ -49,24 +49,30 @@ struct PostResalePrice {
 }
 
 async fn post_resale_price(
+    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
     req: Json<PostResalePrice>,
 ) -> Result<HttpResponse, PricingError> {
     let cryptogram = JsonCryptogram {
-        steps: vec![JsonCryptogramStep {
-            service: ServiceName::Pricing,
-            method: MethodName::Lookup,
-            payload: json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }),
-            postflight: None,
-        }],
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Pricing, MethodName::Lookup)
+            .payload(json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }))
+            .finish()
+        ],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(cryptogram, live_client, services.get_ref(), make_state())
-        .await
-        .map_err(PricingError::Evaluate)?;
+    let result = do_evaluate(
+        ctx.get_ref(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .map_err(PricingError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
