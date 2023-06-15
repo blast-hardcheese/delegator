@@ -218,6 +218,15 @@ async fn get_explore(
         None
     };
 
+    let page_context = json!({
+        "owner_id": owner_id,
+        "features": {
+            "recommendations": features.recommendations,
+        }
+    });
+
+    let emit_user_action = { Language::EmitEvent(events.user_action.clone(), page_context) };
+
     let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
         let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
             .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
@@ -247,7 +256,7 @@ async fn get_explore(
             .payload(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
-            .preflight(Language::EmitEvent(events.user_action.clone(), json!(null)))
+            .preflight(emit_user_action.clone())
             .postflight(Language::Splat(vec![
                 Language::Map(
                     Box::new(Language::At(String::from("next_start"))),
@@ -257,6 +266,7 @@ async fn get_explore(
                     Box::new(Language::At(String::from("has_more"))),
                     Box::new(Language::Set(String::from("has_more"))),
                 ),
+                emit_user_action,
                 Language::Object(vec![(
                     String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
