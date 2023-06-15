@@ -44,6 +44,7 @@ pub enum Language {
     Const(Value),                    // const(...)
     Identity,
     EmitEvent(EventTopic, PageContext),
+    Map(Box<Language>, Box<Language>), // ... | ...
 }
 
 #[derive(Debug)]
@@ -165,6 +166,10 @@ pub fn step(
                 client.emit(topic, current, page_context);
             }
             Ok(current.clone())
+        }
+        Language::Map(first, second) => {
+            let intermediate = step(ctx, first, current, state.clone())?;
+            step(ctx, second, &intermediate, state)
         }
     }
 }
