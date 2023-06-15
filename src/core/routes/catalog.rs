@@ -275,7 +275,22 @@ async fn get_explore(
                     Box::new(Language::At(String::from("has_more"))),
                     Box::new(Language::Set(String::from("has_more"))),
                 ),
-                emit_user_action,
+                Language::Map(
+                    Box::new(Language::Object(vec![
+                        (
+                            String::from("product_variant_ids"),
+                            Language::At(String::from("product_variant_ids")),
+                        ),
+                        (
+                            String::from("length"),
+                            Language::Map(
+                                Box::new(Language::At(String::from("product_variant_ids"))),
+                                Box::new(Language::Length),
+                            ),
+                        ),
+                    ])),
+                    Box::new(emit_user_action),
+                ),
                 Language::Object(vec![(
                     String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
