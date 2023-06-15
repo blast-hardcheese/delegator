@@ -45,6 +45,7 @@ pub enum Language {
     Identity,
     EmitEvent(EventTopic, PageContext),
     Map(Box<Language>, Box<Language>), // ... | ...
+    Length,                            // [...] | size
 }
 
 #[derive(Debug)]
@@ -171,6 +172,14 @@ pub fn step(
             let intermediate = step(ctx, first, current, state.clone())?;
             step(ctx, second, &intermediate, state)
         }
+        Language::Length => match current {
+            Value::Array(vec) => Ok(Value::Number(serde_json::Number::from(vec.len()))),
+            Value::Object(map) => Ok(Value::Number(serde_json::Number::from(map.len()))),
+            other => {
+                log::warn!("Attempted to call size on an unsized object: {:?}", other);
+                Ok(Value::Null)
+            }
+        },
     }
 }
 
