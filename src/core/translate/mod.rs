@@ -28,6 +28,9 @@ impl TranslateContext {
     }
 }
 
+pub type OwnerId = String;
+pub type ActionContextId = String;
+
 // translate
 //
 // A poor man's jq.
@@ -42,7 +45,7 @@ pub enum Language {
     Get(String),                     // get("bar") | ...
     Const(Value),                    // const(...)
     Identity,
-    EmitEvent(EventTopic, PageContext),
+    EmitEvent(Option<OwnerId>, EventTopic, ActionContextId, PageContext),
     Map(Box<Language>, Box<Language>), // ... | ...
     Length,                            // [...] | size
 }
@@ -149,9 +152,9 @@ pub fn step(
         }
         Language::Const(value) => Ok(value.clone()),
         Language::Identity => Ok(current.clone()),
-        Language::EmitEvent(topic, page_context) => {
+        Language::EmitEvent(owner_id, topic, action_context_id, page_context) => {
             if let Some(client) = &ctx.client {
-                client.emit(topic, current, page_context);
+                client.emit(topic, owner_id, action_context_id, current, page_context);
             }
             Ok(current.clone())
         }

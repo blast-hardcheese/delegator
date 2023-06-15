@@ -5,7 +5,7 @@ use log::debug;
 use serde_json::{json, Value};
 use sqs::{error::SdkError, operation::send_message::SendMessageError};
 
-use crate::config::events::EventTopic;
+use crate::{config::events::EventTopic, translate::OwnerId};
 
 pub type ActionContext = Value;
 pub type PageContext = Value;
@@ -38,8 +38,17 @@ impl EventClient {
         EventClient { client }
     }
 
-    pub fn emit(&self, topic: &EventTopic, event: &ActionContext, page_context: &PageContext) {
+    pub fn emit(
+        &self,
+        topic: &EventTopic,
+        owner_id: &Option<OwnerId>,
+        action_context_id: &String,
+        event: &ActionContext,
+        page_context: &PageContext,
+    ) {
         let payload = json!({
+            "owner_id": owner_id,
+            "action_context_id": action_context_id,
             "action_context": event,
             "page_context": page_context,
         });

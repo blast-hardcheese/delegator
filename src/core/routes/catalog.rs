@@ -225,7 +225,14 @@ async fn get_explore(
         }
     });
 
-    let emit_user_action = { Language::EmitEvent(events.user_action.clone(), page_context) };
+    let emit_user_action = {
+        Language::EmitEvent(
+            owner_id.clone(),
+            events.user_action.clone(),
+            String::from("foobarbaz"),
+            page_context,
+        )
+    };
 
     let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
         let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
