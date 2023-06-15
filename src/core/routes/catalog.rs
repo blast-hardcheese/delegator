@@ -10,6 +10,7 @@ use actix_web::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 use crate::{
     config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
@@ -28,6 +29,7 @@ pub struct ExploreRequest {
     q: Option<String>,
     size: Option<i32>,
     start: Option<String>,
+    search_id: Option<Uuid>,
 }
 
 #[derive(Debug, Display)]
@@ -218,6 +220,22 @@ async fn get_explore(
         None
     };
 
+    let page_context = json!({
+        "owner_id": owner_id,
+        "features": {
+            "recommendations": features.recommendations,
+        }
+    });
+
+    let emit_user_action = {
+        Language::EmitEvent(
+            owner_id.clone(),
+            events.user_action.clone(),
+            req.search_id.unwrap_or(Uuid::new_v4()),
+            page_context,
+        )
+    };
+
     let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
         let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
             .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
@@ -247,15 +265,31 @@ async fn get_explore(
             .payload(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
-            .preflight(Language::EmitEvent(events.user_action.clone(), json!(null)))
+            .preflight(emit_user_action.clone())
             .postflight(Language::Splat(vec![
-                Language::Focus(
-                    String::from("next_start"),
+                Language::Map(
+                    Box::new(Language::At(String::from("next_start"))),
                     Box::new(Language::Set(String::from("next_start"))),
                 ),
-                Language::Focus(
-                    String::from("has_more"),
+                Language::Map(
+                    Box::new(Language::At(String::from("has_more"))),
                     Box::new(Language::Set(String::from("has_more"))),
+                ),
+                Language::Map(
+                    Box::new(Language::Object(vec![
+                        (
+                            String::from("product_variant_ids"),
+                            Language::At(String::from("product_variant_ids")),
+                        ),
+                        (
+                            String::from("length"),
+                            Language::Map(
+                                Box::new(Language::At(String::from("product_variant_ids"))),
+                                Box::new(Language::Length),
+                            ),
+                        ),
+                    ])),
+                    Box::new(emit_user_action),
                 ),
                 Language::Object(vec![(
                     String::from("product_variant_ids"),
@@ -292,8 +326,8 @@ async fn get_explore(
                             ),
                             (
                                 String::from("data"),
-                                Language::Focus(
-                                    String::from("product_variants"),
+                                Language::Map(
+                                    Box::new(Language::At(String::from("product_variants"))),
                                     Box::new(Language::Array(Box::new(Language::Object(vec![
                                         (
                                             String::from("brand_name"),

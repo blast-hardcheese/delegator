@@ -447,8 +447,8 @@ async fn routes_evaluate() {
         steps: vec![
             JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Search)
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
-                .postflight(Language::Focus(
-                    String::from("results"),
+                .postflight(Language::Map(
+                    Box::new(Language::At(String::from("results"))),
                     Box::new(Language::Object(vec![
                         (
                             String::from("ids"),
@@ -510,7 +510,8 @@ async fn routes_evaluate() {
         },
     );
 
-    match do_evaluate(cryptogram, TestJsonClient, &services, make_state()).await {
+    let ctx = TranslateContext::noop();
+    match do_evaluate(&ctx, cryptogram, TestJsonClient, &services, make_state()).await {
         Ok(value) => assert_eq!(
             value,
             json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })

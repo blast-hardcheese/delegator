@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct TranslateContext {
@@ -28,6 +29,9 @@ impl TranslateContext {
     }
 }
 
+pub type OwnerId = String;
+pub type ActionContextId = Uuid;
+
 // translate
 //
 // A poor man's jq.
@@ -35,7 +39,6 @@ impl TranslateContext {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Language {
     At(String),                      // .foo
-    Focus(String, Box<Language>),    // .foo | ...
     Array(Box<Language>),            // map( ... )
     Object(Vec<(String, Language)>), // { foo: .foo, bar: .bar  }
     Splat(Vec<Language>),            // .foo, .bar
@@ -43,7 +46,9 @@ pub enum Language {
     Get(String),                     // get("bar") | ...
     Const(Value),                    // const(...)
     Identity,
-    EmitEvent(EventTopic, PageContext),
+    EmitEvent(Option<OwnerId>, EventTopic, ActionContextId, PageContext),
+    Map(Box<Language>, Box<Language>), // ... | ...
+    Length,                            // [...] | size
 }
 
 #[derive(Debug)]
@@ -103,18 +108,6 @@ pub fn step(
                     .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
             })?
             .clone()),
-        Language::Focus(key, next) => step(
-            ctx,
-            next,
-            current.get(key).ok_or_else(|| StepError {
-                history: vec![key.clone()],
-                choices: current
-                    .as_object()
-                    .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
-            })?,
-            state,
-        )
-        .map_err(|se| se.prepend_history(key.clone())),
         Language::Array(next) => Ok(Value::Array(
             current
                 .as_array()
@@ -160,12 +153,24 @@ pub fn step(
         }
         Language::Const(value) => Ok(value.clone()),
         Language::Identity => Ok(current.clone()),
-        Language::EmitEvent(topic, page_context) => {
+        Language::EmitEvent(owner_id, topic, action_context_id, page_context) => {
             if let Some(client) = &ctx.client {
-                client.emit(topic, current, page_context);
+                client.emit(topic, owner_id, action_context_id, current, page_context);
             }
             Ok(current.clone())
         }
+        Language::Map(first, second) => {
+            let intermediate = step(ctx, first, current, state.clone())?;
+            step(ctx, second, &intermediate, state)
+        }
+        Language::Length => match current {
+            Value::Array(vec) => Ok(Value::Number(serde_json::Number::from(vec.len()))),
+            Value::Object(map) => Ok(Value::Number(serde_json::Number::from(map.len()))),
+            other => {
+                log::warn!("Attempted to call size on an unsized object: {:?}", other);
+                Ok(Value::Null)
+            }
+        },
     }
 }
 
@@ -205,8 +210,8 @@ fn translate_error_array() {
 fn translate_error_focus() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Focus(
-        String::from("foo"),
+    let prog = Language::Map(
+        Box::new(Language::At(String::from("foo"))),
         Box::new(Language::At(String::from("bar"))),
     );
 
@@ -243,8 +248,8 @@ fn translate_error_object() {
 fn translate_test() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Focus(
-        String::from("results"),
+    let prog = Language::Map(
+        Box::new(Language::At(String::from("results"))),
         Box::new(Language::Object(vec![(
             String::from("ids"),
             Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
