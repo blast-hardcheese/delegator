@@ -43,6 +43,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings
 
+      - name: Run tests
+        run: cargo test
+
 #  Tarpaulin is a code coverage tool, but it can't differentiate between our
 #  code and our library code, so it ends up rebuilding everything from scratch
 #  every CI run.
