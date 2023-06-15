@@ -265,7 +265,19 @@ async fn get_explore(
             .payload(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
-            .preflight(emit_user_action.clone())
+            .preflight(Language::Splat(vec![
+                Language::Map(
+                    Box::new(Language::Object(vec![
+                        (String::from("query"), Language::At(String::from("q"))),
+                        (
+                            String::from("page_size"),
+                            Language::At(String::from("size")),
+                        ),
+                    ])),
+                    Box::new(emit_user_action.clone()),
+                ),
+                Language::Identity,
+            ]))
             .postflight(Language::Splat(vec![
                 Language::Map(
                     Box::new(Language::At(String::from("next_start"))),
