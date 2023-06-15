@@ -249,12 +249,12 @@ async fn get_explore(
             )
             .preflight(Language::EmitEvent(events.user_action.clone(), json!(null)))
             .postflight(Language::Splat(vec![
-                Language::Focus(
-                    String::from("next_start"),
+                Language::Map(
+                    Box::new(Language::At(String::from("next_start"))),
                     Box::new(Language::Set(String::from("next_start"))),
                 ),
-                Language::Focus(
-                    String::from("has_more"),
+                Language::Map(
+                    Box::new(Language::At(String::from("has_more"))),
                     Box::new(Language::Set(String::from("has_more"))),
                 ),
                 Language::Object(vec![(
@@ -292,8 +292,8 @@ async fn get_explore(
                             ),
                             (
                                 String::from("data"),
-                                Language::Focus(
-                                    String::from("product_variants"),
+                                Language::Map(
+                                    Box::new(Language::At(String::from("product_variants"))),
                                     Box::new(Language::Array(Box::new(Language::Object(vec![
                                         (
                                             String::from("brand_name"),

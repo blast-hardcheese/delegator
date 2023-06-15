@@ -33,7 +33,7 @@ fn parse_at(input: &str) -> IResult<&str, Language> {
     let name = String::from(key);
     let term = match proj {
         None => Language::At(name),
-        Some(rest) => Language::Focus(name, Box::new(rest)),
+        Some(rest) => Language::Map(Box::new(Language::At(name)), Box::new(rest)),
     };
     Ok((input, term))
 }
@@ -111,8 +111,8 @@ fn test_parse_at() {
 #[test]
 fn test_parse_focus() {
     let prog = ".foo | .bar";
-    let expected = Language::Focus(
-        String::from("foo"),
+    let expected = Language::Map(
+        Box::new(Language::At(String::from("foo"))),
         Box::new(Language::At(String::from("bar"))),
     );
     let (input, result) = parse_at(prog).unwrap();
@@ -147,8 +147,8 @@ fn test_parse_object() {
 fn test_parse_set_get() {
     let prog = r#".foo | set("foo"), { "bar": .bar, "foo": get("foo") }"#;
     let expected = Language::Splat(vec![
-        Language::Focus(
-            String::from("foo"),
+        Language::Map(
+            Box::new(Language::At(String::from("foo"))),
             Box::new(Language::Set(String::from("foo"))),
         ),
         Language::Object(vec![

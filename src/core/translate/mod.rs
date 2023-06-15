@@ -35,7 +35,6 @@ impl TranslateContext {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Language {
     At(String),                      // .foo
-    Focus(String, Box<Language>),    // .foo | ...
     Array(Box<Language>),            // map( ... )
     Object(Vec<(String, Language)>), // { foo: .foo, bar: .bar  }
     Splat(Vec<Language>),            // .foo, .bar
@@ -105,18 +104,6 @@ pub fn step(
                     .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
             })?
             .clone()),
-        Language::Focus(key, next) => step(
-            ctx,
-            next,
-            current.get(key).ok_or_else(|| StepError {
-                history: vec![key.clone()],
-                choices: current
-                    .as_object()
-                    .map(|o| Value::Array(o.keys().map(|x| Value::String(x.to_owned())).collect())),
-            })?,
-            state,
-        )
-        .map_err(|se| se.prepend_history(key.clone())),
         Language::Array(next) => Ok(Value::Array(
             current
                 .as_array()
@@ -219,8 +206,8 @@ fn translate_error_array() {
 fn translate_error_focus() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Focus(
-        String::from("foo"),
+    let prog = Language::Map(
+        Box::new(Language::At(String::from("foo"))),
         Box::new(Language::At(String::from("bar"))),
     );
 
@@ -257,8 +244,8 @@ fn translate_error_object() {
 fn translate_test() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Focus(
-        String::from("results"),
+    let prog = Language::Map(
+        Box::new(Language::At(String::from("results"))),
         Box::new(Language::Object(vec![(
             String::from("ids"),
             Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
