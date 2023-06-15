@@ -417,10 +417,22 @@ async fn post_history(authorization: Option<Authorization>) -> Result<HttpRespon
 
     Ok(HttpResponse::Ok().json(json!({
         "results": [
-            "Alison Lou",
-            "Louis Vuitton",
-            "Christian Louboutin",
-            "Jean Louis Scherrer",
+            {
+                "id": "80A1B395-986A-4140-9C78-56D26EB6E25E",
+                "q": "Alison Lou"
+            },
+            {
+                "id": "D283ECDA-BA2D-4C38-875A-366E0A80AE85",
+                "q": "Louis Vuitton"
+            },
+            {
+                "id": "81A4999D-54B2-4D78-8E3F-91C9645CBEB7",
+                "q": "Christian Louboutin"
+            },
+            {
+                "id": "CB87611D-AD9B-4CCA-9DBE-10D44369AC6C",
+                "q": "Jean Louis Scherrer"
+            },
         ]
     })))
 }
