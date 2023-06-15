@@ -10,6 +10,7 @@ use actix_web::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use uuid::Uuid;
 
 use crate::{
     config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
@@ -28,6 +29,7 @@ pub struct ExploreRequest {
     q: Option<String>,
     size: Option<i32>,
     start: Option<String>,
+    search_id: Option<Uuid>,
 }
 
 #[derive(Debug, Display)]
@@ -229,7 +231,7 @@ async fn get_explore(
         Language::EmitEvent(
             owner_id.clone(),
             events.user_action.clone(),
-            String::from("foobarbaz"),
+            req.search_id.unwrap_or(Uuid::new_v4()),
             page_context,
         )
     };

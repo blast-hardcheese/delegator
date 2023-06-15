@@ -5,7 +5,10 @@ use log::debug;
 use serde_json::{json, Value};
 use sqs::{error::SdkError, operation::send_message::SendMessageError};
 
-use crate::{config::events::EventTopic, translate::OwnerId};
+use crate::{
+    config::events::EventTopic,
+    translate::{ActionContextId, OwnerId},
+};
 
 pub type ActionContext = Value;
 pub type PageContext = Value;
@@ -42,7 +45,7 @@ impl EventClient {
         &self,
         topic: &EventTopic,
         owner_id: &Option<OwnerId>,
-        action_context_id: &String,
+        action_context_id: &ActionContextId,
         event: &ActionContext,
         page_context: &PageContext,
     ) {

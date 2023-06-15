@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use hashbrown::HashMap;
 use serde_json::{Map, Value};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct TranslateContext {
@@ -29,7 +30,7 @@ impl TranslateContext {
 }
 
 pub type OwnerId = String;
-pub type ActionContextId = String;
+pub type ActionContextId = Uuid;
 
 // translate
 //
