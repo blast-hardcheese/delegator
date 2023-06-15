@@ -510,7 +510,8 @@ async fn routes_evaluate() {
         },
     );
 
-    match do_evaluate(cryptogram, TestJsonClient, &services, make_state()).await {
+    let ctx = TranslateContext::noop();
+    match do_evaluate(&ctx, cryptogram, TestJsonClient, &services, make_state()).await {
         Ok(value) => assert_eq!(
             value,
             json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })
