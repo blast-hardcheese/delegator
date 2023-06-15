@@ -23,7 +23,7 @@
         },
         {
           "name": "SENTRY_RELEASE",
-          "value": "${ name }-${ image_tag }"
+          "value": "${ name }@${ image_tag }"
         },
         {
           "name": "USER_ACTIONS_SQS_URL",
