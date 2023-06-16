@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use aws_sdk_sqs as sqs;
 use log::debug;
+use serde::Serialize;
 use serde_json::{json, Value};
 use sqs::{error::SdkError, operation::send_message::SendMessageError};
 
@@ -15,6 +16,14 @@ pub type PageContext = Value;
 
 pub enum EventEmissionError {
     ClientError(),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub enum EventType {
+    #[serde(alias = "search")]
+    Search,
+    #[serde(alias = "search_result")]
+    SearchResult,
 }
 
 impl From<serde_json::Error> for EventEmissionError {
@@ -45,12 +54,14 @@ impl EventClient {
         &self,
         topic: &EventTopic,
         owner_id: &Option<OwnerId>,
+        event_type: &EventType,
         action_context_id: &ActionContextId,
         event: &ActionContext,
         page_context: &PageContext,
     ) {
         let payload = json!({
             "owner_id": owner_id,
+            "event_type": event_type,
             "action_context_id": action_context_id,
             "action_context": event,
             "page_context": page_context,
