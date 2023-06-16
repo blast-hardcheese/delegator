@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
+    events::EventType,
     headers::authorization::Authorization,
     headers::{authorization::BearerFields, features::Features},
     translate::{make_state, Language, TranslateContext},
@@ -227,12 +228,13 @@ async fn get_explore(
         }
     });
 
-    let emit_user_action = {
+    let emit_user_action = |et: EventType| {
         Language::EmitEvent(
             owner_id.clone(),
             events.user_action.clone(),
+            et,
             req.search_id.unwrap_or(Uuid::new_v4()),
-            page_context,
+            page_context.clone(),
         )
     };
 
@@ -265,7 +267,19 @@ async fn get_explore(
             .payload(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
-            .preflight(emit_user_action.clone())
+            .preflight(Language::Splat(vec![
+                Language::Map(
+                    Box::new(Language::Object(vec![
+                        (String::from("query"), Language::At(String::from("q"))),
+                        (
+                            String::from("page_size"),
+                            Language::At(String::from("size")),
+                        ),
+                    ])),
+                    Box::new(emit_user_action(EventType::Search)),
+                ),
+                Language::Identity,
+            ]))
             .postflight(Language::Splat(vec![
                 Language::Map(
                     Box::new(Language::At(String::from("next_start"))),
@@ -289,7 +303,7 @@ async fn get_explore(
                             ),
                         ),
                     ])),
-                    Box::new(emit_user_action),
+                    Box::new(emit_user_action(EventType::SearchResult)),
                 ),
                 Language::Object(vec![(
                     String::from("product_variant_ids"),
