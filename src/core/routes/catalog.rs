@@ -419,6 +419,38 @@ async fn post_suggestions(
     Ok(HttpResponse::Ok().json(&result))
 }
 
+async fn post_history(authorization: Option<Authorization>) -> Result<HttpResponse, ExploreError> {
+    let authorization: Authorization = authorization.unwrap_or(Authorization::empty());
+    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
+        Some(owner_id)
+    } else {
+        None
+    };
+
+    log::info!("Emitting static history for {:?}", owner_id);
+
+    Ok(HttpResponse::Ok().json(json!({
+        "results": [
+            {
+                "id": "80A1B395-986A-4140-9C78-56D26EB6E25E",
+                "q": "Alison Lou"
+            },
+            {
+                "id": "D283ECDA-BA2D-4C38-875A-366E0A80AE85",
+                "q": "Louis Vuitton"
+            },
+            {
+                "id": "81A4999D-54B2-4D78-8E3F-91C9645CBEB7",
+                "q": "Christian Louboutin"
+            },
+            {
+                "id": "CB87611D-AD9B-4CCA-9DBE-10D44369AC6C",
+                "q": "Jean Louis Scherrer"
+            },
+        ]
+    })))
+}
+
 pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
     let host_route = || web::route().guard(guard::Host(hostname.clone()));
     server
@@ -426,6 +458,10 @@ pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
         .route(
             "/explore/suggestions",
             host_route().guard(guard::Post()).to(post_suggestions),
+        )
+        .route(
+            "/explore/history",
+            host_route().guard(guard::Post()).to(post_history),
         )
         .route(
             "/product_variants",
