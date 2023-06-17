@@ -1,6 +1,7 @@
 use derive_more::Display;
 use sentry::Breadcrumb;
 use std::num::ParseIntError;
+use tokio::sync::Mutex;
 
 use actix_web::{
     body::BoxBody,
@@ -13,6 +14,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{
+    cache::MemoizationCache,
     config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
     events::EventType,
     headers::authorization::Authorization,
@@ -90,6 +92,7 @@ impl error::ResponseError for ExploreError {
 }
 
 async fn get_product_variant_image(
+    cache_state: Data<Mutex<MemoizationCache>>,
     ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -111,6 +114,7 @@ async fn get_product_variant_image(
 
     let result = do_evaluate(
         ctx.get_ref(),
+        cache_state.into_inner(),
         cryptogram,
         live_client,
         services.get_ref(),
@@ -135,6 +139,7 @@ async fn get_product_variant_image(
 }
 
 async fn get_product_variants(
+    cache_state: Data<Mutex<MemoizationCache>>,
     ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -172,6 +177,7 @@ async fn get_product_variants(
 
     let result = do_evaluate(
         ctx.get_ref(),
+        cache_state.into_inner(),
         cryptogram,
         live_client,
         services.get_ref(),
@@ -182,7 +188,9 @@ async fn get_product_variants(
     Ok(HttpResponse::Ok().json(&result))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn get_explore(
+    cache_state: Data<Mutex<MemoizationCache>>,
     ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -376,6 +384,7 @@ async fn get_explore(
 
     let result = do_evaluate(
         ctx.get_ref(),
+        cache_state.into_inner(),
         cryptogram,
         live_client,
         services.get_ref(),
@@ -392,6 +401,7 @@ struct SuggestionsRequest {
 }
 
 async fn post_suggestions(
+    cache_state: Data<Mutex<MemoizationCache>>,
     ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -409,6 +419,7 @@ async fn post_suggestions(
 
     let result = do_evaluate(
         ctx.get_ref(),
+        cache_state.into_inner(),
         cryptogram,
         live_client,
         services.get_ref(),

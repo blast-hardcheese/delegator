@@ -8,8 +8,10 @@ use derive_more::Display;
 use sentry::Breadcrumb;
 use serde::Deserialize;
 use serde_json::json;
+use tokio::sync::Mutex;
 
 use crate::{
+    cache::MemoizationCache,
     config::{HttpClientConfig, MethodName, ServiceName, Services},
     translate::{make_state, TranslateContext},
 };
@@ -49,6 +51,7 @@ struct PostResalePrice {
 }
 
 async fn post_resale_price(
+    cache_state: Data<Mutex<MemoizationCache>>,
     ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
     services: Data<Services>,
@@ -66,6 +69,7 @@ async fn post_resale_price(
 
     let result = do_evaluate(
         ctx.get_ref(),
+        cache_state.into_inner(),
         cryptogram,
         live_client,
         services.get_ref(),
