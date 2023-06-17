@@ -367,68 +367,74 @@ pub async fn do_evaluate<JC: JsonClient>(
         let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
 
-        let service = services
-            .get(service_name)
-            .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
-            .to_owned();
-        final_result = match service {
-            ServiceDefinition::Rest {
-                scheme,
-                authority,
-                methods,
-            } => {
-                let method = methods.get(method_name).ok_or_else(|| {
-                    EvaluateError::UnknownMethod(service_name.to_owned(), method_name.to_owned())
-                })?;
+        let outgoing_payload = if let Some(pf) = preflight {
+            translate::step(ctx, pf, payload, translator_state.clone())
+                .map_err(EvaluateError::InvalidStructure)?
+        } else {
+            payload.clone()
+        };
 
-                let uri = Uri::builder()
-                    .scheme(scheme)
-                    .authority(authority)
-                    .path_and_query(method.path.to_owned())
-                    .build()
-                    .map_err(EvaluateError::UriBuilderError)?;
+        let new_payload = {
+            let service = services
+                .get(service_name)
+                .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
+                .to_owned();
+            match service {
+                ServiceDefinition::Rest {
+                    scheme,
+                    authority,
+                    methods,
+                } => {
+                    let method = methods.get(method_name).ok_or_else(|| {
+                        EvaluateError::UnknownMethod(
+                            service_name.to_owned(),
+                            method_name.to_owned(),
+                        )
+                    })?;
 
-                sentry::add_breadcrumb(Breadcrumb {
-                    ty: String::from("evaluate_step"),
-                    data: SentryMap::from([
-                        (String::from("service"), service_name.to_string().into()),
-                        (String::from("method"), method_name.to_string().into()),
-                    ]),
-                    ..Breadcrumb::default()
-                });
+                    let uri = Uri::builder()
+                        .scheme(scheme)
+                        .authority(authority)
+                        .path_and_query(method.path.to_owned())
+                        .build()
+                        .map_err(EvaluateError::UriBuilderError)?;
 
-                let outgoing_payload = if let Some(pf) = preflight {
-                    translate::step(ctx, pf, payload, translator_state.clone())
-                        .map_err(EvaluateError::InvalidStructure)?
-                } else {
-                    payload.clone()
-                };
+                    sentry::add_breadcrumb(Breadcrumb {
+                        ty: String::from("evaluate_step"),
+                        data: SentryMap::from([
+                            (String::from("service"), service_name.to_string().into()),
+                            (String::from("method"), method_name.to_string().into()),
+                        ]),
+                        ..Breadcrumb::default()
+                    });
 
-                let result = json_client
-                    .issue_request(method.method.clone(), uri, &outgoing_payload)
-                    .await?;
+                    let result = json_client
+                        .issue_request(method.method.clone(), uri, &outgoing_payload)
+                        .await?;
 
-                let new_payload = if let Some(pf) = postflight {
-                    translate::step(ctx, pf, &result, translator_state.clone())
-                        .map_err(EvaluateError::InvalidStructure)?
-                } else {
-                    result
-                };
-
-                let next_idx = step + 1;
-                if !state.contains_key(&next_idx) {
-                    return Ok(new_payload);
+                    if let Some(pf) = postflight {
+                        translate::step(ctx, pf, &result, translator_state.clone())
+                            .map_err(EvaluateError::InvalidStructure)?
+                    } else {
+                        result
+                    }
                 }
-
-                let mut next = state.remove(&next_idx).ok_or_else(|| {
-                    EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
-                })?;
-                next.payload = new_payload.clone();
-                state.insert(next_idx, next);
-
-                Some(new_payload)
             }
         };
+
+        let next_idx = step + 1;
+        if !state.contains_key(&next_idx) {
+            return Ok(new_payload);
+        }
+
+        let mut next = state.remove(&next_idx).ok_or_else(|| {
+            EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
+        })?;
+        next.payload = new_payload.clone();
+        state.insert(next_idx, next);
+
+        final_result = Some(new_payload);
+
         step += 1;
     }
 
