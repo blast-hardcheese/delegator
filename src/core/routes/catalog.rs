@@ -366,6 +366,7 @@ async fn get_explore(
                         (String::from("start"), Language::Const(json!(0))),
                     ]))
                     .headers(headers)
+                    .memoization_prefix(format!("{}-", owner_id.as_ref().unwrap()))
                     .finish()
             },
             {
@@ -375,6 +376,7 @@ async fn get_explore(
                         String::from("product_variant_ids"),
                         Language::At(String::from("product_variant_ids")),
                     )]))
+                    .memoization_prefix(format!("{}-", owner_id.unwrap()))
                     .finish()
             },
         ];
