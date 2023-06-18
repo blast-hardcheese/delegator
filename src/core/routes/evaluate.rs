@@ -276,6 +276,7 @@ pub trait JsonClient {
         method: Method,
         uri: Uri,
         value: &Value,
+        headers: Vec<(String, String)>,
     ) -> Result<Value, EvaluateError>;
 }
 
@@ -305,12 +306,17 @@ impl JsonClient for LiveJsonClient {
         method: Method,
         uri: Uri,
         payload: &Value,
+        headers: Vec<(String, String)>,
     ) -> Result<Value, EvaluateError> {
-        let mut result = self
+        let mut req = self
             .client
             .request(method, uri)
             .insert_header(("User-Agent", self.client_config.user_agent.clone()))
-            .insert_header(("Content-Type", "application/json"))
+            .insert_header(("Content-Type", "application/json"));
+        for pair in headers.iter() {
+            req = req.insert_header(pair.clone());
+        }
+        let mut result = req
             .send_json(payload)
             .await
             .map_err(EvaluateError::ClientError)?;
@@ -344,6 +350,7 @@ impl JsonClient for TestJsonClient {
         _method: Method,
         _uri: Uri,
         payload: &Value,
+        _headers: Vec<(String, String)>,
     ) -> Result<Value, EvaluateError> {
         Ok(payload.clone())
     }
