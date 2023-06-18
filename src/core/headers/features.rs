@@ -1,6 +1,7 @@
 use std::{future::Future, pin::Pin};
 
 use actix_web::FromRequest;
+use hashbrown::HashSet;
 
 use super::HeaderError;
 
@@ -27,8 +28,12 @@ impl FromRequest for Features {
         Box::pin(async move {
             let recommendations: bool = if let Some(v) = req.headers().get(String::from("Features"))
             {
-                let value = v.to_str().map_err(HeaderError::InvalidFeatureHeader)?;
-                value.contains("recommendations")
+                let values: HashSet<&str> = v
+                    .to_str()
+                    .map_err(HeaderError::InvalidFeatureHeader)?
+                    .split(',')
+                    .collect();
+                values.contains("recommendations")
             } else {
                 false
             };
