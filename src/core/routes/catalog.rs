@@ -254,6 +254,9 @@ async fn get_explore(
     };
 
     let (sources, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
+        if features.debug {
+            log::warn!("DEBUG: Recommendation flow selected");
+        }
         let sources = vec![
             {
                 let payload = json!({
@@ -534,6 +537,10 @@ async fn get_explore(
     )
     .await
     .map_err(ExploreError::Evaluate)?;
+
+    if features.debug {
+        log::warn!("DEBUG: Flow finished: {:?}", cryptogram);
+    }
     Ok(HttpResponse::Ok().json(&result))
 }
 
