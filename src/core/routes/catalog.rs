@@ -9,6 +9,7 @@ use actix_web::{
     web::{self, Data, Json},
     HttpResponse,
 };
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -26,6 +27,8 @@ use super::{
     errors::{json_error_response, JsonResponseError},
     evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient},
 };
+
+const JWT_ESCAPED: AsciiSet = NON_ALPHANUMERIC.remove(b'.').remove(b'-');
 
 #[derive(Debug, Deserialize)]
 pub struct ExploreRequest {
@@ -223,10 +226,14 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let owner_id = if let Authorization::Bearer(BearerFields { owner_id, .. }) = authorization {
-        Some(owner_id)
+    let (owner_id, raw_value) = if let Authorization::Bearer(BearerFields {
+        owner_id,
+        raw_value,
+    }) = authorization
+    {
+        (Some(owner_id), Some(raw_value))
     } else {
-        None
+        (None, None)
     };
 
     let page_context = json!({
@@ -247,16 +254,133 @@ async fn get_explore(
     };
 
     let (sources, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
-        let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
-            .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
-            .postflight(Language::Object(vec![(
-                String::from("ids"),
-                Language::At(String::from("results")),
-            )]))
-            .finish();
+        let sources = vec![
+            {
+                let payload = json!({
+                    "query": r"
+                    query CurrentUser($sort: WalletItemsSortTypeInput) {
+                      currentUser {
+                        __typename
+                        ... on CurrentUser {
+                          id
+                          fullName
+                          username
+                          primaryEmailAddress
+                          avatarImage {
+                            url
+                            __typename
+                          }
+                          socialAccounts {
+                            instagram
+                            twitter
+                            tiktok
+                            __typename
+                          }
+                          userSettings {
+                            welcomeExperienceShown
+                            __typename
+                          }
+                          __typename
+                          recommendationSeedPhrase
+                          wallets {
+                            id,
+                            numVerifiedWalletItems,
+                            items(limit: 100, offset: 0, sort: $sort) {
+                              totalCount,
+                              paginated {
+                                __typename,
+                                id,
+                                createdAt,
+                                protectionState,
+                                type,
+                                image(adjustments: null) {
+                                  url
+                                  width
+                                  height
+                                  lqip(strategy: pixelate) {
+                                    url
+                                    width
+                                    height
+                                    strategy
+                                  }
+                                }
+                                moderationFlag,
+                                ... on UnidentifiedWalletItem {
+                                  unidentifiedBrandName
+                                }
+                                ... on IdentifiedWalletItem {
+                                  product {
+                                    currentResalePrice {
+                                      amount,
+                                      currency
+                                    },
+                                    currentRetailPrice {
+                                      amount,
+                                      currency
+                                    },
+                                    brand {
+                                      name
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            total
+                          }
+                        }
+                      }
+                    }
+                ",
+                    "variables": {}
+                });
+
+                let mut headers: Vec<(String, String)> = vec![];
+                if let Some(jwt) = raw_value {
+                    let expressjs_cookie = format!("s:{}", jwt);
+                    let encoded =
+                        utf8_percent_encode(expressjs_cookie.as_ref(), &JWT_ESCAPED).to_string();
+                    headers.push((
+                        String::from("Cookie"),
+                        format!("appreciate-auth={}", encoded),
+                    ));
+                }
+                JsonCryptogramStep::build(ServiceName::Identity, MethodName::Lookup)
+                    .payload(payload)
+                    .postflight(Language::Object(vec![
+                        (
+                            String::from("q"),
+                            Language::Map(
+                                Box::new(Language::At(String::from("data"))),
+                                Box::new(Language::Map(
+                                    Box::new(Language::At(String::from("currentUser"))),
+                                    Box::new(Language::Map(
+                                        Box::new(Language::At(String::from(
+                                            "recommendationSeedPhrase",
+                                        ))),
+                                        Box::new(Language::Join(String::from(" "))),
+                                    )),
+                                )),
+                            ),
+                        ),
+                        (String::from("size"), Language::Const(json!(6))),
+                        (String::from("start"), Language::Const(json!(0))),
+                    ]))
+                    .headers(headers)
+                    .finish()
+            },
+            {
+                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+                    .payload(json!({}))
+                    .postflight(Language::Object(vec![(
+                        String::from("product_variant_ids"),
+                        Language::At(String::from("product_variant_ids")),
+                    )]))
+                    .finish()
+            },
+        ];
         let next_start = format!("catalog:{}", size);
         (
-            vec![source],
+            sources,
             vec![
                 (
                     String::from("next_start"),
