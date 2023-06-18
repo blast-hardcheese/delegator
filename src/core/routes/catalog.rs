@@ -223,7 +223,7 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
+    let owner_id = if let Authorization::Bearer(BearerFields { owner_id, .. }) = authorization {
         Some(owner_id)
     } else {
         None
@@ -448,7 +448,7 @@ async fn post_suggestions(
 
 async fn post_history(authorization: Option<Authorization>) -> Result<HttpResponse, ExploreError> {
     let authorization: Authorization = authorization.unwrap_or(Authorization::empty());
-    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
+    let owner_id = if let Authorization::Bearer(BearerFields { owner_id, .. }) = authorization {
         Some(owner_id)
     } else {
         None
