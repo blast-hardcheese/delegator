@@ -32,18 +32,18 @@ impl FromRequest for Features {
     ) -> Self::Future {
         let req = req.clone();
         Box::pin(async move {
-            let recommendations: bool = if let Some(v) = req.headers().get(String::from("Features"))
-            {
+            if let Some(v) = req.headers().get(String::from("Features")) {
                 let values: HashSet<&str> = v
                     .to_str()
                     .map_err(HeaderError::InvalidFeatureHeader)?
                     .split(',')
                     .collect();
-                values.contains("recommendations")
+                Ok(Features {
+                    recommendations: values.contains("recommendations"),
+                })
             } else {
-                false
-            };
-            Ok(Features { recommendations })
+                Ok(Features::default())
+            }
         })
     }
 }
