@@ -17,6 +17,12 @@ impl Features {
     }
 }
 
+impl Default for Features {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl FromRequest for Features {
     type Error = HeaderError;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
