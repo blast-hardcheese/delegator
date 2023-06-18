@@ -32,6 +32,7 @@ pub struct JsonCryptogramStep {
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
     pub memoization_prefix: Option<String>,
+    pub headers: Vec<(String, String)>,
 }
 
 impl JsonCryptogramStep {
@@ -55,6 +56,7 @@ impl JsonCryptogramStepNeedsPayload {
                 preflight: None,
                 postflight: None,
                 memoization_prefix: None,
+                headers: vec![],
             },
         }
     }
@@ -87,6 +89,30 @@ impl JsonCryptogramStepBuilder {
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
                 memoization_prefix: Some(prefix),
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn header(self, key: String, value: String) -> JsonCryptogramStepBuilder {
+        let mut headers = self.inner.headers;
+        headers.push((key, value));
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                headers,
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn headers(self, pairs: Vec<(String, String)>) -> JsonCryptogramStepBuilder {
+        let mut headers = self.inner.headers;
+        for pair in pairs {
+            headers.push(pair);
+        }
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                headers,
                 ..self.inner
             },
         }
@@ -390,6 +416,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
         let memoization_prefix = &current_step.memoization_prefix;
+        let headers = &current_step.headers;
 
         let outgoing_payload = if let Some(pf) = preflight {
             translate::step(ctx, pf, payload, translator_state.clone())
@@ -444,7 +471,12 @@ pub async fn do_evaluate<JC: JsonClient>(
                     });
 
                     let result = json_client
-                        .issue_request(method.method.clone(), uri, &outgoing_payload)
+                        .issue_request(
+                            method.method.clone(),
+                            uri,
+                            &outgoing_payload,
+                            headers.clone(),
+                        )
                         .await?;
 
                     if let Some(pf) = postflight {
