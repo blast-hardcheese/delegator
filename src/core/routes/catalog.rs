@@ -246,7 +246,7 @@ async fn get_explore(
         )
     };
 
-    let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
+    let (sources, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
         let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
             .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
             .postflight(Language::Object(vec![(
@@ -256,7 +256,7 @@ async fn get_explore(
             .finish();
         let next_start = format!("catalog:{}", size);
         (
-            source,
+            vec![source],
             vec![
                 (
                     String::from("next_start"),
@@ -320,7 +320,7 @@ async fn get_explore(
             ]))
             .finish();
         (
-            source,
+            vec![source],
             vec![
                 (
                     String::from("next_start"),
@@ -336,48 +336,64 @@ async fn get_explore(
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            source,
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
-                .payload(json!({ "product_variant_ids": [] }))
-                .postflight(Language::Object(
-                    vec![
+            sources,
+            vec![
+                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                    .payload(json!({ "product_variant_ids": [] }))
+                    .postflight(Language::Object(
                         vec![
-                            (
-                                String::from("results"),
-                                Language::At(String::from("product_variants")),
-                            ),
-                            (
-                                String::from("data"),
-                                Language::Map(
-                                    Box::new(Language::At(String::from("product_variants"))),
-                                    Box::new(Language::Array(Box::new(Language::Object(vec![
-                                        (
-                                            String::from("brand_name"),
-                                            Language::At(String::from("brand_variant_name")),
-                                        ),
-                                        (
-                                            String::from("catalog_id"),
-                                            Language::At(String::from("id")),
-                                        ),
-                                        (String::from("id"), Language::At(String::from("id"))),
-                                        (String::from("item_id"), Language::At(String::from("id"))),
-                                        (
-                                            String::from("link"),
-                                            Language::At(String::from("primary_image")),
-                                        ),
-                                        (String::from("title"), Language::At(String::from("name"))),
-                                    ])))),
+                            vec![
+                                (
+                                    String::from("results"),
+                                    Language::At(String::from("product_variants")),
                                 ),
-                            ), // TODO: Delete this ASAP
-                            (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
-                            (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
-                        ],
-                        next_start,
-                    ]
-                    .concat(),
-                ))
-                .finish(),
-        ],
+                                (
+                                    String::from("data"),
+                                    Language::Map(
+                                        Box::new(Language::At(String::from("product_variants"))),
+                                        Box::new(Language::Array(Box::new(Language::Object(
+                                            vec![
+                                                (
+                                                    String::from("brand_name"),
+                                                    Language::At(String::from(
+                                                        "brand_variant_name",
+                                                    )),
+                                                ),
+                                                (
+                                                    String::from("catalog_id"),
+                                                    Language::At(String::from("id")),
+                                                ),
+                                                (
+                                                    String::from("id"),
+                                                    Language::At(String::from("id")),
+                                                ),
+                                                (
+                                                    String::from("item_id"),
+                                                    Language::At(String::from("id")),
+                                                ),
+                                                (
+                                                    String::from("link"),
+                                                    Language::At(String::from("primary_image")),
+                                                ),
+                                                (
+                                                    String::from("title"),
+                                                    Language::At(String::from("name")),
+                                                ),
+                                            ],
+                                        )))),
+                                    ),
+                                ), // TODO: Delete this ASAP
+                                (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
+                                (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
+                            ],
+                            next_start,
+                        ]
+                        .concat(),
+                    ))
+                    .finish(),
+            ],
+        ]
+        .concat(),
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());

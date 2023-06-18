@@ -24,7 +24,7 @@ use crate::{
 
 use super::errors::{json_error_response, JsonResponseError};
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogramStep {
     pub service: ServiceName,
     pub method: MethodName,
