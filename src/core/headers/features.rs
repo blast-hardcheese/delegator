@@ -7,12 +7,14 @@ use super::HeaderError;
 
 pub struct Features {
     pub recommendations: bool,
+    pub debug: bool,
 }
 
 impl Features {
     pub fn empty() -> Features {
         Features {
             recommendations: false,
+            debug: false,
         }
     }
 }
@@ -40,6 +42,7 @@ impl FromRequest for Features {
                     .collect();
                 Ok(Features {
                     recommendations: values.contains("recommendations"),
+                    debug: values.contains("debug"),
                 })
             } else {
                 Ok(Features::default())
