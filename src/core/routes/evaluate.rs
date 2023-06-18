@@ -8,7 +8,6 @@ use actix_web::{
     HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
-use hashbrown::HashMap;
 use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
@@ -385,7 +384,7 @@ impl JsonClient for TestJsonClient {
 pub async fn do_evaluate<JC: JsonClient>(
     ctx: &TranslateContext,
     memoization_cache: Arc<Mutex<MemoizationCache>>,
-    cryptogram: JsonCryptogram,
+    mut cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
     translator_state: translate::State,
@@ -405,11 +404,9 @@ pub async fn do_evaluate<JC: JsonClient>(
 
     let mut final_result: Option<Value> = None;
 
-    let mut state: HashMap<usize, JsonCryptogramStep> =
-        cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
-    while step < state.len() {
-        let current_step = state.get(&step).ok_or(EvaluateError::UnknownStep(step))?;
+    while step < cryptogram.steps.len() {
+        let current_step = &cryptogram.steps[step];
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
@@ -498,15 +495,11 @@ pub async fn do_evaluate<JC: JsonClient>(
         };
 
         let next_idx = step + 1;
-        if !state.contains_key(&next_idx) {
+        if next_idx >= cryptogram.steps.len() {
             return Ok(new_payload);
         }
 
-        let mut next = state.remove(&next_idx).ok_or_else(|| {
-            EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
-        })?;
-        next.payload = new_payload.clone();
-        state.insert(next_idx, next);
+        cryptogram.steps[next_idx].payload = new_payload.clone();
 
         final_result = Some(new_payload);
 
@@ -522,6 +515,7 @@ async fn routes_evaluate() {
     use crate::config::{MethodName, ServiceName};
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
+    use hashbrown::HashMap;
     use serde_json::json;
 
     let cryptogram = JsonCryptogram {
