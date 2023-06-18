@@ -115,7 +115,7 @@ async fn get_product_variant_image(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -178,7 +178,7 @@ async fn get_product_variants(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -524,7 +524,7 @@ async fn get_explore(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, cryptogram) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -559,7 +559,7 @@ async fn post_suggestions(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,

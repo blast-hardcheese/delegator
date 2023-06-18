@@ -282,7 +282,7 @@ async fn evaluate(
 ) -> Result<HttpResponse, EvaluateError> {
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram.into_inner(),
@@ -388,7 +388,7 @@ pub async fn do_evaluate<JC: JsonClient>(
     json_client: JC,
     services: &Services,
     translator_state: translate::State,
-) -> Result<Value, EvaluateError> {
+) -> Result<(Value, JsonCryptogram), EvaluateError> {
     let parent_span = sentry::configure_scope(|scope| scope.get_span());
 
     let span: sentry::TransactionOrSpan = match &parent_span {
@@ -496,7 +496,7 @@ pub async fn do_evaluate<JC: JsonClient>(
 
         let next_idx = step + 1;
         if next_idx >= cryptogram.steps.len() {
-            return Ok(new_payload);
+            return Ok((new_payload, cryptogram));
         }
 
         cryptogram.steps[next_idx].payload = new_payload.clone();
@@ -506,7 +506,9 @@ pub async fn do_evaluate<JC: JsonClient>(
         step += 1;
     }
 
-    final_result.ok_or(EvaluateError::NoStepsSpecified)
+    final_result
+        .map(|v| (v, cryptogram))
+        .ok_or(EvaluateError::NoStepsSpecified)
 }
 
 #[actix_web::test]
@@ -597,7 +599,7 @@ async fn routes_evaluate() {
     )
     .await
     {
-        Ok(value) => assert_eq!(
+        Ok((value, _)) => assert_eq!(
             value,
             json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })
         ),

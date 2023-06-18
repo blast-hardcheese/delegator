@@ -67,7 +67,7 @@ async fn post_resale_price(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
