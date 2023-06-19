@@ -13,9 +13,11 @@ use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{fmt, str::Utf8Error};
+use std::{fmt, str::Utf8Error, sync::Arc, time::Duration};
+use tokio::sync::Mutex;
 
 use crate::{
+    cache::{hash_value, MemoizationCache},
     config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
     translate::{self, make_state, Language, StepError, TranslateContext},
 };
@@ -29,6 +31,7 @@ pub struct JsonCryptogramStep {
     pub payload: Value,
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
+    pub memoization_prefix: Option<String>,
 }
 
 impl JsonCryptogramStep {
@@ -51,6 +54,7 @@ impl JsonCryptogramStepNeedsPayload {
                 payload,
                 preflight: None,
                 postflight: None,
+                memoization_prefix: None,
             },
         }
     }
@@ -74,6 +78,15 @@ impl JsonCryptogramStepBuilder {
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
                 postflight: Some(postflight),
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn memoization_prefix(self, prefix: String) -> JsonCryptogramStepBuilder {
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                memoization_prefix: Some(prefix),
                 ..self.inner
             },
         }
@@ -239,12 +252,14 @@ async fn evaluate(
     ctx: Data<TranslateContext>,
     cryptogram: Json<JsonCryptogram>,
     client_config: Data<HttpClientConfig>,
+    cache_state: Data<Mutex<MemoizationCache>>,
     services: Data<Services>,
 ) -> Result<HttpResponse, EvaluateError> {
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
     let result = do_evaluate(
         ctx.get_ref(),
+        cache_state.into_inner(),
         cryptogram.into_inner(),
         live_client,
         services.get_ref(),
@@ -336,6 +351,7 @@ impl JsonClient for TestJsonClient {
 
 pub async fn do_evaluate<JC: JsonClient>(
     ctx: &TranslateContext,
+    memoization_cache: Arc<Mutex<MemoizationCache>>,
     cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
@@ -366,69 +382,95 @@ pub async fn do_evaluate<JC: JsonClient>(
         let payload = &current_step.payload;
         let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
+        let memoization_prefix = &current_step.memoization_prefix;
 
-        let service = services
-            .get(service_name)
-            .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
-            .to_owned();
-        final_result = match service {
-            ServiceDefinition::Rest {
-                scheme,
-                authority,
-                methods,
-            } => {
-                let method = methods.get(method_name).ok_or_else(|| {
-                    EvaluateError::UnknownMethod(service_name.to_owned(), method_name.to_owned())
-                })?;
+        let outgoing_payload = if let Some(pf) = preflight {
+            translate::step(ctx, pf, payload, translator_state.clone())
+                .map_err(EvaluateError::InvalidStructure)?
+        } else {
+            payload.clone()
+        };
 
-                let uri = Uri::builder()
-                    .scheme(scheme)
-                    .authority(authority)
-                    .path_and_query(method.path.to_owned())
-                    .build()
-                    .map_err(EvaluateError::UriBuilderError)?;
+        let memo_key = memoization_prefix
+            .clone()
+            .map(|prefix| format!("{}{}", prefix, hash_value(&outgoing_payload)));
 
-                sentry::add_breadcrumb(Breadcrumb {
-                    ty: String::from("evaluate_step"),
-                    data: SentryMap::from([
-                        (String::from("service"), service_name.to_string().into()),
-                        (String::from("method"), method_name.to_string().into()),
-                    ]),
-                    ..Breadcrumb::default()
-                });
+        let maybe_cache = if let Some(key) = memo_key.as_ref() {
+            memoization_cache.lock().await.get(key).cloned()
+        } else {
+            None
+        };
+        let new_payload = if let Some(cached_value) = maybe_cache {
+            cached_value
+        } else {
+            let service = services
+                .get(service_name)
+                .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
+                .to_owned();
+            let new_payload = match service {
+                ServiceDefinition::Rest {
+                    scheme,
+                    authority,
+                    methods,
+                } => {
+                    let method = methods.get(method_name).ok_or_else(|| {
+                        EvaluateError::UnknownMethod(
+                            service_name.to_owned(),
+                            method_name.to_owned(),
+                        )
+                    })?;
 
-                let outgoing_payload = if let Some(pf) = preflight {
-                    translate::step(ctx, pf, payload, translator_state.clone())
-                        .map_err(EvaluateError::InvalidStructure)?
-                } else {
-                    payload.clone()
-                };
+                    let uri = Uri::builder()
+                        .scheme(scheme)
+                        .authority(authority)
+                        .path_and_query(method.path.to_owned())
+                        .build()
+                        .map_err(EvaluateError::UriBuilderError)?;
 
-                let result = json_client
-                    .issue_request(method.method.clone(), uri, &outgoing_payload)
-                    .await?;
+                    sentry::add_breadcrumb(Breadcrumb {
+                        ty: String::from("evaluate_step"),
+                        data: SentryMap::from([
+                            (String::from("service"), service_name.to_string().into()),
+                            (String::from("method"), method_name.to_string().into()),
+                        ]),
+                        ..Breadcrumb::default()
+                    });
 
-                let new_payload = if let Some(pf) = postflight {
-                    translate::step(ctx, pf, &result, translator_state.clone())
-                        .map_err(EvaluateError::InvalidStructure)?
-                } else {
-                    result
-                };
+                    let result = json_client
+                        .issue_request(method.method.clone(), uri, &outgoing_payload)
+                        .await?;
 
-                let next_idx = step + 1;
-                if !state.contains_key(&next_idx) {
-                    return Ok(new_payload);
+                    if let Some(pf) = postflight {
+                        translate::step(ctx, pf, &result, translator_state.clone())
+                            .map_err(EvaluateError::InvalidStructure)?
+                    } else {
+                        result
+                    }
                 }
-
-                let mut next = state.remove(&next_idx).ok_or_else(|| {
-                    EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
-                })?;
-                next.payload = new_payload.clone();
-                state.insert(next_idx, next);
-
-                Some(new_payload)
+            };
+            if let Some(key) = memo_key {
+                memoization_cache
+                    .lock()
+                    .await
+                    .insert(key, new_payload, Duration::from_secs(600))
+            } else {
+                new_payload
             }
         };
+
+        let next_idx = step + 1;
+        if !state.contains_key(&next_idx) {
+            return Ok(new_payload);
+        }
+
+        let mut next = state.remove(&next_idx).ok_or_else(|| {
+            EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
+        })?;
+        next.payload = new_payload.clone();
+        state.insert(next_idx, next);
+
+        final_result = Some(new_payload);
+
         step += 1;
     }
 
@@ -511,7 +553,17 @@ async fn routes_evaluate() {
     );
 
     let ctx = TranslateContext::noop();
-    match do_evaluate(&ctx, cryptogram, TestJsonClient, &services, make_state()).await {
+    let memoization_cache = Arc::new(MemoizationCache::new());
+    match do_evaluate(
+        &ctx,
+        memoization_cache,
+        cryptogram,
+        TestJsonClient,
+        &services,
+        make_state(),
+    )
+    .await
+    {
         Ok(value) => assert_eq!(
             value,
             json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })

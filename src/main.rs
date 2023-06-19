@@ -6,10 +6,8 @@ use std::{
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use delegator_core::{
-    config::{
-        events::EventConfig, Configuration, HttpClientConfig, ServiceDefinition, ServiceLocation,
-        Services,
-    },
+    cache::MemoizationCache,
+    config::{Configuration, ServiceDefinition, ServiceLocation},
     events::EventClient,
     translate::TranslateContext,
 };
@@ -122,10 +120,11 @@ async fn main() -> Result<()> {
             .wrap(Logger::default().log_target("accesslog"))
             .wrap(cors)
             .wrap(sentry_actix::Sentry::new())
-            .app_data::<Data<EventConfig>>(Data::new(events.clone()))
-            .app_data::<Data<HttpClientConfig>>(Data::new(http.client.clone()))
-            .app_data::<Data<Services>>(Data::new(services.clone()))
-            .app_data::<Data<TranslateContext>>(Data::new(ctx.clone()))
+            .app_data(Data::new(events.clone()))
+            .app_data(Data::new(http.client.clone()))
+            .app_data(Data::new(services.clone()))
+            .app_data(Data::new(ctx.clone()))
+            .app_data(Data::new(MemoizationCache::new()))
             .configure(|server| delegator_core::routes::configure(server, &virtualhosts))
     })
     .bind((http.host, http.port))?
