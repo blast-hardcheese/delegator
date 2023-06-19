@@ -304,7 +304,7 @@ locals {
 
   # These secrets will be read from the SSM Parameter Store
   secret_path  = "/${local.env}/${local.component}/env"
-  secret_names = [ "SENTRY_DSN" ]
+  secret_names = [ "SENTRY_DSN", "HTTP_COOKIE_SECRET" ]
   secrets = [
     for secret_name in local.secret_names:
     {

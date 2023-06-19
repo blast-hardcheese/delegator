@@ -55,6 +55,7 @@ pub enum Language {
     ),
     Map(Box<Language>, Box<Language>), // ... | ...
     Length,                            // [...] | size
+    Join(String),                      // [...] | join(",")
 }
 
 #[derive(Debug)]
@@ -182,6 +183,28 @@ pub fn step(
             other => {
                 log::warn!("Attempted to call size on an unsized object: {:?}", other);
                 Ok(Value::Null)
+            }
+        },
+        Language::Join(by) => match current {
+            Value::Array(vec) => {
+                let mut elems: Vec<String> = vec![];
+                for elem in vec.iter() {
+                    match elem {
+                        Value::String(x) => elems.push(x.clone()),
+                        other => {
+                            log::warn!("Attempted to join with a non-stringy array: {:?}", other)
+                        }
+                    }
+                }
+
+                Ok(Value::String(elems.join(by)))
+            }
+            other => {
+                log::warn!("Attempted to join on an unexpected type: {:?}", other);
+                Err(StepError {
+                    history: vec![],
+                    choices: None,
+                })
             }
         },
     }

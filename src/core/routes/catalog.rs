@@ -9,6 +9,7 @@ use actix_web::{
     web::{self, Data, Json},
     HttpResponse,
 };
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -26,6 +27,8 @@ use super::{
     errors::{json_error_response, JsonResponseError},
     evaluate::{do_evaluate, JsonCryptogram, JsonCryptogramStep, LiveJsonClient},
 };
+
+const JWT_ESCAPED: AsciiSet = NON_ALPHANUMERIC.remove(b'.').remove(b'-');
 
 #[derive(Debug, Deserialize)]
 pub struct ExploreRequest {
@@ -112,7 +115,7 @@ async fn get_product_variant_image(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -175,7 +178,7 @@ async fn get_product_variants(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -223,10 +226,14 @@ async fn get_explore(
         [..] => (0, None),
     };
 
-    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
-        Some(owner_id)
+    let (owner_id, raw_value) = if let Authorization::Bearer(BearerFields {
+        owner_id,
+        raw_value,
+    }) = authorization
+    {
+        (Some(owner_id), Some(raw_value))
     } else {
-        None
+        (None, None)
     };
 
     let page_context = json!({
@@ -246,17 +253,139 @@ async fn get_explore(
         )
     };
 
-    let (source, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
-        let source = JsonCryptogramStep::build(ServiceName::Recommendations, MethodName::Lookup)
-            .payload(json!({ "size": size, "owner_id": owner_id.unwrap() }))
-            .postflight(Language::Object(vec![(
-                String::from("ids"),
-                Language::At(String::from("results")),
-            )]))
-            .finish();
+    let (sources, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
+        if features.debug {
+            log::warn!("DEBUG: Recommendation flow selected");
+        }
+        let sources = vec![
+            {
+                let payload = json!({
+                    "query": r"
+                    query CurrentUser($sort: WalletItemsSortTypeInput) {
+                      currentUser {
+                        __typename
+                        ... on CurrentUser {
+                          id
+                          fullName
+                          username
+                          primaryEmailAddress
+                          avatarImage {
+                            url
+                            __typename
+                          }
+                          socialAccounts {
+                            instagram
+                            twitter
+                            tiktok
+                            __typename
+                          }
+                          userSettings {
+                            welcomeExperienceShown
+                            __typename
+                          }
+                          __typename
+                          recommendationSeedPhrase
+                          wallets {
+                            id,
+                            numVerifiedWalletItems,
+                            items(limit: 100, offset: 0, sort: $sort) {
+                              totalCount,
+                              paginated {
+                                __typename,
+                                id,
+                                createdAt,
+                                protectionState,
+                                type,
+                                image(adjustments: null) {
+                                  url
+                                  width
+                                  height
+                                  lqip(strategy: pixelate) {
+                                    url
+                                    width
+                                    height
+                                    strategy
+                                  }
+                                }
+                                moderationFlag,
+                                ... on UnidentifiedWalletItem {
+                                  unidentifiedBrandName
+                                }
+                                ... on IdentifiedWalletItem {
+                                  product {
+                                    currentResalePrice {
+                                      amount,
+                                      currency
+                                    },
+                                    currentRetailPrice {
+                                      amount,
+                                      currency
+                                    },
+                                    brand {
+                                      name
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            total
+                          }
+                        }
+                      }
+                    }
+                ",
+                    "variables": {}
+                });
+
+                let mut headers: Vec<(String, String)> = vec![];
+                if let Some(jwt) = raw_value {
+                    let expressjs_cookie = format!("s:{}", jwt);
+                    let encoded =
+                        utf8_percent_encode(expressjs_cookie.as_ref(), &JWT_ESCAPED).to_string();
+                    headers.push((
+                        String::from("Cookie"),
+                        format!("appreciate-auth={}", encoded),
+                    ));
+                }
+                JsonCryptogramStep::build(ServiceName::Identity, MethodName::Lookup)
+                    .payload(payload)
+                    .postflight(Language::Object(vec![
+                        (
+                            String::from("q"),
+                            Language::Map(
+                                Box::new(Language::At(String::from("data"))),
+                                Box::new(Language::Map(
+                                    Box::new(Language::At(String::from("currentUser"))),
+                                    Box::new(Language::Map(
+                                        Box::new(Language::At(String::from(
+                                            "recommendationSeedPhrase",
+                                        ))),
+                                        Box::new(Language::Join(String::from(" "))),
+                                    )),
+                                )),
+                            ),
+                        ),
+                        (String::from("size"), Language::Const(json!(6))),
+                        (String::from("start"), Language::Const(json!(0))),
+                    ]))
+                    .headers(headers)
+                    .memoization_prefix(format!("{}-", owner_id.as_ref().unwrap()))
+                    .finish()
+            },
+            {
+                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+                    .payload(json!({}))
+                    .postflight(Language::Object(vec![(
+                        String::from("product_variant_ids"),
+                        Language::At(String::from("product_variant_ids")),
+                    )]))
+                    .memoization_prefix(format!("{}-", owner_id.unwrap()))
+                    .finish()
+            },
+        ];
         let next_start = format!("catalog:{}", size);
         (
-            source,
+            sources,
             vec![
                 (
                     String::from("next_start"),
@@ -320,7 +449,7 @@ async fn get_explore(
             ]))
             .finish();
         (
-            source,
+            vec![source],
             vec![
                 (
                     String::from("next_start"),
@@ -336,53 +465,69 @@ async fn get_explore(
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            source,
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
-                .payload(json!({ "product_variant_ids": [] }))
-                .postflight(Language::Object(
-                    vec![
+            sources,
+            vec![
+                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                    .payload(json!({ "product_variant_ids": [] }))
+                    .postflight(Language::Object(
                         vec![
-                            (
-                                String::from("results"),
-                                Language::At(String::from("product_variants")),
-                            ),
-                            (
-                                String::from("data"),
-                                Language::Map(
-                                    Box::new(Language::At(String::from("product_variants"))),
-                                    Box::new(Language::Array(Box::new(Language::Object(vec![
-                                        (
-                                            String::from("brand_name"),
-                                            Language::At(String::from("brand_variant_name")),
-                                        ),
-                                        (
-                                            String::from("catalog_id"),
-                                            Language::At(String::from("id")),
-                                        ),
-                                        (String::from("id"), Language::At(String::from("id"))),
-                                        (String::from("item_id"), Language::At(String::from("id"))),
-                                        (
-                                            String::from("link"),
-                                            Language::At(String::from("primary_image")),
-                                        ),
-                                        (String::from("title"), Language::At(String::from("name"))),
-                                    ])))),
+                            vec![
+                                (
+                                    String::from("results"),
+                                    Language::At(String::from("product_variants")),
                                 ),
-                            ), // TODO: Delete this ASAP
-                            (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
-                            (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
-                        ],
-                        next_start,
-                    ]
-                    .concat(),
-                ))
-                .finish(),
-        ],
+                                (
+                                    String::from("data"),
+                                    Language::Map(
+                                        Box::new(Language::At(String::from("product_variants"))),
+                                        Box::new(Language::Array(Box::new(Language::Object(
+                                            vec![
+                                                (
+                                                    String::from("brand_name"),
+                                                    Language::At(String::from(
+                                                        "brand_variant_name",
+                                                    )),
+                                                ),
+                                                (
+                                                    String::from("catalog_id"),
+                                                    Language::At(String::from("id")),
+                                                ),
+                                                (
+                                                    String::from("id"),
+                                                    Language::At(String::from("id")),
+                                                ),
+                                                (
+                                                    String::from("item_id"),
+                                                    Language::At(String::from("id")),
+                                                ),
+                                                (
+                                                    String::from("link"),
+                                                    Language::At(String::from("primary_image")),
+                                                ),
+                                                (
+                                                    String::from("title"),
+                                                    Language::At(String::from("name")),
+                                                ),
+                                            ],
+                                        )))),
+                                    ),
+                                ), // TODO: Delete this ASAP
+                                (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
+                                (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
+                            ],
+                            next_start,
+                        ]
+                        .concat(),
+                    ))
+                    .finish(),
+            ],
+        ]
+        .concat(),
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, cryptogram) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -392,6 +537,10 @@ async fn get_explore(
     )
     .await
     .map_err(ExploreError::Evaluate)?;
+
+    if features.debug {
+        log::warn!("DEBUG: Flow finished: {:?}", cryptogram);
+    }
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -417,7 +566,7 @@ async fn post_suggestions(
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram,
@@ -432,7 +581,7 @@ async fn post_suggestions(
 
 async fn post_history(authorization: Option<Authorization>) -> Result<HttpResponse, ExploreError> {
     let authorization: Authorization = authorization.unwrap_or(Authorization::empty());
-    let owner_id = if let Authorization::Bearer(BearerFields { owner_id }) = authorization {
+    let owner_id = if let Authorization::Bearer(BearerFields { owner_id, .. }) = authorization {
         Some(owner_id)
     } else {
         None

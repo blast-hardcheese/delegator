@@ -9,6 +9,7 @@ use super::HeaderError;
 
 pub struct BearerFields {
     pub owner_id: String,
+    pub raw_value: String,
 }
 
 pub enum Authorization {
@@ -57,7 +58,10 @@ impl FromRequest for Authorization {
                 match Vec::from_iter(value.splitn(2, ' ')).as_slice() {
                     ["Bearer", token] => {
                         if let Some(owner_id) = hmac_verify(String::from(*token)) {
-                            Authorization::Bearer(BearerFields { owner_id })
+                            Authorization::Bearer(BearerFields {
+                                owner_id,
+                                raw_value: String::from(*token),
+                            })
                         } else {
                             // TODO: This should likely be an error. Invalid auth specified is
                             // different than no auth specified.

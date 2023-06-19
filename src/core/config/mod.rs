@@ -40,6 +40,8 @@ pub enum MethodName {
 pub enum ServiceName {
     #[serde(rename(deserialize = "catalog"))]
     Catalog,
+    #[serde(rename(deserialize = "identity"))]
+    Identity,
     #[serde(rename(deserialize = "pricing"))]
     Pricing,
     #[serde(rename(deserialize = "recommendations"))]

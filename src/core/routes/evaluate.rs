@@ -8,7 +8,6 @@ use actix_web::{
     HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
-use hashbrown::HashMap;
 use sentry::types::protocol::v7::Map as SentryMap;
 use sentry::Breadcrumb;
 use serde::Deserialize;
@@ -24,7 +23,7 @@ use crate::{
 
 use super::errors::{json_error_response, JsonResponseError};
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogramStep {
     pub service: ServiceName,
     pub method: MethodName,
@@ -32,6 +31,7 @@ pub struct JsonCryptogramStep {
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
     pub memoization_prefix: Option<String>,
+    pub headers: Vec<(String, String)>,
 }
 
 impl JsonCryptogramStep {
@@ -55,6 +55,7 @@ impl JsonCryptogramStepNeedsPayload {
                 preflight: None,
                 postflight: None,
                 memoization_prefix: None,
+                headers: vec![],
             },
         }
     }
@@ -87,6 +88,30 @@ impl JsonCryptogramStepBuilder {
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
                 memoization_prefix: Some(prefix),
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn header(self, key: String, value: String) -> JsonCryptogramStepBuilder {
+        let mut headers = self.inner.headers;
+        headers.push((key, value));
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                headers,
+                ..self.inner
+            },
+        }
+    }
+
+    pub fn headers(self, pairs: Vec<(String, String)>) -> JsonCryptogramStepBuilder {
+        let mut headers = self.inner.headers;
+        for pair in pairs {
+            headers.push(pair);
+        }
+        JsonCryptogramStepBuilder {
+            inner: JsonCryptogramStep {
+                headers,
                 ..self.inner
             },
         }
@@ -257,7 +282,7 @@ async fn evaluate(
 ) -> Result<HttpResponse, EvaluateError> {
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let result = do_evaluate(
+    let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
         cryptogram.into_inner(),
@@ -276,6 +301,7 @@ pub trait JsonClient {
         method: Method,
         uri: Uri,
         value: &Value,
+        headers: Vec<(String, String)>,
     ) -> Result<Value, EvaluateError>;
 }
 
@@ -305,12 +331,17 @@ impl JsonClient for LiveJsonClient {
         method: Method,
         uri: Uri,
         payload: &Value,
+        headers: Vec<(String, String)>,
     ) -> Result<Value, EvaluateError> {
-        let mut result = self
+        let mut req = self
             .client
             .request(method, uri)
             .insert_header(("User-Agent", self.client_config.user_agent.clone()))
-            .insert_header(("Content-Type", "application/json"))
+            .insert_header(("Content-Type", "application/json"));
+        for pair in headers.iter() {
+            req = req.insert_header(pair.clone());
+        }
+        let mut result = req
             .send_json(payload)
             .await
             .map_err(EvaluateError::ClientError)?;
@@ -344,6 +375,7 @@ impl JsonClient for TestJsonClient {
         _method: Method,
         _uri: Uri,
         payload: &Value,
+        _headers: Vec<(String, String)>,
     ) -> Result<Value, EvaluateError> {
         Ok(payload.clone())
     }
@@ -352,11 +384,11 @@ impl JsonClient for TestJsonClient {
 pub async fn do_evaluate<JC: JsonClient>(
     ctx: &TranslateContext,
     memoization_cache: Arc<Mutex<MemoizationCache>>,
-    cryptogram: JsonCryptogram,
+    mut cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
     translator_state: translate::State,
-) -> Result<Value, EvaluateError> {
+) -> Result<(Value, JsonCryptogram), EvaluateError> {
     let parent_span = sentry::configure_scope(|scope| scope.get_span());
 
     let span: sentry::TransactionOrSpan = match &parent_span {
@@ -372,17 +404,16 @@ pub async fn do_evaluate<JC: JsonClient>(
 
     let mut final_result: Option<Value> = None;
 
-    let mut state: HashMap<usize, JsonCryptogramStep> =
-        cryptogram.steps.into_iter().enumerate().collect();
     let mut step: usize = 0;
-    while step < state.len() {
-        let current_step = state.get(&step).ok_or(EvaluateError::UnknownStep(step))?;
+    while step < cryptogram.steps.len() {
+        let current_step = &cryptogram.steps[step];
         let service_name = &current_step.service;
         let method_name = &current_step.method;
         let payload = &current_step.payload;
         let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
         let memoization_prefix = &current_step.memoization_prefix;
+        let headers = &current_step.headers;
 
         let outgoing_payload = if let Some(pf) = preflight {
             translate::step(ctx, pf, payload, translator_state.clone())
@@ -437,7 +468,12 @@ pub async fn do_evaluate<JC: JsonClient>(
                     });
 
                     let result = json_client
-                        .issue_request(method.method.clone(), uri, &outgoing_payload)
+                        .issue_request(
+                            method.method.clone(),
+                            uri,
+                            &outgoing_payload,
+                            headers.clone(),
+                        )
                         .await?;
 
                     if let Some(pf) = postflight {
@@ -459,22 +495,20 @@ pub async fn do_evaluate<JC: JsonClient>(
         };
 
         let next_idx = step + 1;
-        if !state.contains_key(&next_idx) {
-            return Ok(new_payload);
+        if next_idx >= cryptogram.steps.len() {
+            return Ok((new_payload, cryptogram));
         }
 
-        let mut next = state.remove(&next_idx).ok_or_else(|| {
-            EvaluateError::InvalidTransition(state.keys().copied().collect(), next_idx)
-        })?;
-        next.payload = new_payload.clone();
-        state.insert(next_idx, next);
+        cryptogram.steps[next_idx].payload = new_payload.clone();
 
         final_result = Some(new_payload);
 
         step += 1;
     }
 
-    final_result.ok_or(EvaluateError::NoStepsSpecified)
+    final_result
+        .map(|v| (v, cryptogram))
+        .ok_or(EvaluateError::NoStepsSpecified)
 }
 
 #[actix_web::test]
@@ -483,6 +517,7 @@ async fn routes_evaluate() {
     use crate::config::{MethodName, ServiceName};
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
+    use hashbrown::HashMap;
     use serde_json::json;
 
     let cryptogram = JsonCryptogram {
@@ -564,7 +599,7 @@ async fn routes_evaluate() {
     )
     .await
     {
-        Ok(value) => assert_eq!(
+        Ok((value, _)) => assert_eq!(
             value,
             json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })
         ),
