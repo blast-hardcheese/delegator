@@ -96,10 +96,10 @@ impl error::ResponseError for ExploreError {
 
 async fn get_product_variant_image(
     cache_state: Data<Mutex<MemoizationCache>>,
-    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
-    services: Data<Services>,
+    ctx: Data<TranslateContext>,
     pvid: web::Path<(String,)>,
+    services: Data<Services>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
@@ -143,10 +143,10 @@ async fn get_product_variant_image(
 
 async fn get_product_variants(
     cache_state: Data<Mutex<MemoizationCache>>,
-    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
-    services: Data<Services>,
+    ctx: Data<TranslateContext>,
     raw_req: web::Query<Vec<(String, String)>>,
+    services: Data<Services>,
 ) -> Result<HttpResponse, ExploreError> {
     // There seems to be no equivalent to Flask's MultiDict in actix-web:
     //   https://stackoverflow.com/questions/63844460/how-can-i-receive-multiple-query-params-with-the-same-name-in-actix-web
@@ -193,14 +193,14 @@ async fn get_product_variants(
 
 #[allow(clippy::too_many_arguments)]
 async fn get_explore(
-    cache_state: Data<Mutex<MemoizationCache>>,
-    ctx: Data<TranslateContext>,
-    client_config: Data<HttpClientConfig>,
-    services: Data<Services>,
-    events: Data<EventConfig>,
-    req: web::Query<ExploreRequest>,
-    features: Option<Features>,
     authorization: Option<Authorization>,
+    cache_state: Data<Mutex<MemoizationCache>>,
+    client_config: Data<HttpClientConfig>,
+    ctx: Data<TranslateContext>,
+    events: Data<EventConfig>,
+    features: Option<Features>,
+    req: web::Query<ExploreRequest>,
+    services: Data<Services>,
 ) -> Result<HttpResponse, ExploreError> {
     let features: Features = features.unwrap_or(Features::empty());
     let authorization: Authorization = authorization.unwrap_or(Authorization::empty());
@@ -503,10 +503,10 @@ struct SuggestionsRequest {
 
 async fn post_suggestions(
     cache_state: Data<Mutex<MemoizationCache>>,
-    ctx: Data<TranslateContext>,
     client_config: Data<HttpClientConfig>,
-    services: Data<Services>,
+    ctx: Data<TranslateContext>,
     req: Json<SuggestionsRequest>,
+    services: Data<Services>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
