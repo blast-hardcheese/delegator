@@ -30,10 +30,9 @@ fn parse_at(input: &str) -> IResult<&str, Language> {
     let (input, key) = leader(input)?;
     let (input, proj) = focus(input)?;
 
-    let name = String::from(key);
     let term = match proj {
-        None => Language::At(name),
-        Some(rest) => Language::At(name).map(rest),
+        None => Language::at(key),
+        Some(rest) => Language::at(key).map(rest),
     };
     Ok((input, term))
 }
@@ -72,7 +71,7 @@ fn parse_get(input: &str) -> IResult<&str, Language> {
         identifier,
         tag("\")"),
     )(input)?;
-    Ok((input, Language::Get(String::from(key))))
+    Ok((input, Language::get(key)))
 }
 
 fn parse_set(input: &str) -> IResult<&str, Language> {
@@ -81,7 +80,7 @@ fn parse_set(input: &str) -> IResult<&str, Language> {
         identifier,
         tag("\")"),
     )(input)?;
-    Ok((input, Language::Set(String::from(key))))
+    Ok((input, Language::set(key)))
 }
 
 fn parse_thunk(input: &str) -> IResult<&str, Language> {
@@ -105,13 +104,13 @@ pub fn parse_language(input: &str) -> IResult<&str, Language> {
 fn test_parse_at() {
     let (input, lang) = parse_at(".foo").unwrap();
     assert_eq!(input, "");
-    assert_eq!(lang, Language::At(String::from("foo")));
+    assert_eq!(lang, Language::at("foo"));
 }
 
 #[test]
 fn test_parse_focus() {
     let prog = ".foo | .bar";
-    let expected = Language::At(String::from("foo")).map(Language::At(String::from("bar")));
+    let expected = Language::at("foo").map(Language::at("bar"));
     let (input, result) = parse_at(prog).unwrap();
     assert_eq!(input, "");
     assert_eq!(result, expected);
@@ -121,18 +120,15 @@ fn test_parse_focus() {
 fn test_parse_map() {
     let (input, lang) = parse_language(".foo").unwrap();
     assert_eq!(input, "");
-    assert_eq!(lang, Language::At(String::from("foo")));
+    assert_eq!(lang, Language::at("foo"));
 }
 
 #[test]
 fn test_parse_object() {
     let prog = r#"{ "foo" : map(.foo) , "bar" : .bar }"#;
     let expected = vec![
-        (
-            String::from("foo"),
-            Language::array(Language::At(String::from("foo"))),
-        ),
-        (String::from("bar"), Language::At(String::from("bar"))),
+        (String::from("foo"), Language::array(Language::at("foo"))),
+        (String::from("bar"), Language::at("bar")),
     ];
 
     let (input, lang) = parse_language(prog).unwrap();
@@ -144,9 +140,9 @@ fn test_parse_object() {
 fn test_parse_set_get() {
     let prog = r#".foo | set("foo"), { "bar": .bar, "foo": get("foo") }"#;
     let expected = Language::Splat(vec![
-        Language::At(String::from("foo")).map(Language::Set(String::from("foo"))),
+        Language::at("foo").map(Language::set("foo")),
         Language::Object(vec![
-            (String::from("bar"), Language::At(String::from("bar"))),
+            (String::from("bar"), Language::at("bar")),
             (String::from("foo"), Language::Get(String::from("foo"))),
         ]),
     ]);

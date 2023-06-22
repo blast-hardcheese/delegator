@@ -63,11 +63,20 @@ impl Language {
     pub fn array(arr: Language) -> Language {
         Language::Array(Box::new(arr))
     }
+    pub fn at(key: &str) -> Language {
+        Language::At(String::from(key))
+    }
     pub fn default(def: Language) -> Language {
         Language::Default(Box::new(def))
     }
+    pub fn get(key: &str) -> Language {
+        Language::Get(String::from(key))
+    }
     pub fn map(&self, next: Language) -> Language {
         Language::Map(Box::new(self.clone()), Box::new(next))
+    }
+    pub fn set(key: &str) -> Language {
+        Language::Set(String::from(key))
     }
 }
 
@@ -231,7 +240,7 @@ pub fn step(
 fn translate_error_at() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::At(String::from("foo"));
+    let prog = Language::at("foo");
 
     let given = json!({ "bar": "baz" });
     if let Some(StepError {
@@ -247,7 +256,7 @@ fn translate_error_at() {
 fn translate_error_array() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::array(Language::At(String::from("foo")));
+    let prog = Language::array(Language::at("foo"));
 
     let given = json!([{ "bar": "baz" }]);
     if let Some(StepError {
@@ -263,7 +272,7 @@ fn translate_error_array() {
 fn translate_error_focus() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::At(String::from("foo")).map(Language::At(String::from("bar")));
+    let prog = Language::at("foo").map(Language::at("bar"));
 
     let given = json!({ "baz": "blix" });
     if let Some(StepError {
@@ -280,8 +289,8 @@ fn translate_error_object() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
     let prog = Language::Object(vec![
-        (String::from("foo"), Language::At(String::from("foo"))),
-        (String::from("bar"), Language::At(String::from("bar"))),
+        (String::from("foo"), Language::at("foo")),
+        (String::from("bar"), Language::at("bar")),
     ]);
 
     let given = json!({ "foo": "foo" });
@@ -298,9 +307,9 @@ fn translate_error_object() {
 fn translate_test() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::At(String::from("results")).map(Language::Object(vec![(
+    let prog = Language::at("results").map(Language::Object(vec![(
         String::from("ids"),
-        Language::array(Language::At(String::from("product_variant_id"))),
+        Language::array(Language::at("product_variant_id")),
     )]));
 
     let given = json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] });
