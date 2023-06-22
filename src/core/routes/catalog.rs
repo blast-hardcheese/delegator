@@ -356,9 +356,14 @@ async fn get_explore(
                                 Box::new(Language::Map(
                                     Box::new(Language::At(String::from("currentUser"))),
                                     Box::new(Language::Map(
-                                        Box::new(Language::At(String::from(
-                                            "recommendationSeedPhrase",
-                                        ))),
+                                        Box::new(Language::Map(
+                                            Box::new(Language::At(String::from(
+                                                "recommendationSeedPhrase",
+                                            ))),
+                                            Box::new(Language::Default(Box::new(Language::Const(
+                                                json!([]),
+                                            )))),
+                                        )),
                                         Box::new(Language::Join(String::from(" "))),
                                     )),
                                 )),
