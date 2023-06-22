@@ -253,7 +253,10 @@ async fn get_explore(
         )
     };
 
-    let (sources, next_start) = if start == 0 && owner_id.is_some() && features.recommendations {
+    let recommendations_flow =
+        start == 0 && req.q.is_none() && owner_id.is_some() && features.recommendations;
+
+    let (sources, next_start) = if recommendations_flow {
         if features.debug {
             log::warn!("DEBUG: Recommendation flow selected");
         }
