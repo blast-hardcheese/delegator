@@ -247,7 +247,7 @@ fn translate_error_at() {
 fn translate_error_array() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Array(Box::new(Language::At(String::from("foo"))));
+    let prog = Language::array(Language::At(String::from("foo")));
 
     let given = json!([{ "bar": "baz" }]);
     if let Some(StepError {
@@ -263,10 +263,7 @@ fn translate_error_array() {
 fn translate_error_focus() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Map(
-        Box::new(Language::At(String::from("foo"))),
-        Box::new(Language::At(String::from("bar"))),
-    );
+    let prog = Language::At(String::from("foo")).map(Language::At(String::from("bar")));
 
     let given = json!({ "baz": "blix" });
     if let Some(StepError {
@@ -301,13 +298,10 @@ fn translate_error_object() {
 fn translate_test() {
     let ctx = TranslateContext::noop();
     use serde_json::json;
-    let prog = Language::Map(
-        Box::new(Language::At(String::from("results"))),
-        Box::new(Language::Object(vec![(
-            String::from("ids"),
-            Language::Array(Box::new(Language::At(String::from("product_variant_id")))),
-        )])),
-    );
+    let prog = Language::At(String::from("results")).map(Language::Object(vec![(
+        String::from("ids"),
+        Language::array(Language::At(String::from("product_variant_id"))),
+    )]));
 
     let given = json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] });
     let expected = json!({ "ids": [ "12313bb7-6068-4ec9-ac49-3e834181f127" ] });

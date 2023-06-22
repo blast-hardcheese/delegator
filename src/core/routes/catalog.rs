@@ -257,10 +257,11 @@ async fn get_explore(
         if features.debug {
             log::warn!("DEBUG: Recommendation flow selected");
         }
-        let sources = vec![
-            {
-                let payload = json!({
-                    "query": r"
+        let sources =
+            vec![
+                {
+                    let payload = json!({
+                        "query": r"
                     query CurrentUser($sort: WalletItemsSortTypeInput) {
                       currentUser {
                         __typename
@@ -334,59 +335,48 @@ async fn get_explore(
                       }
                     }
                 ",
-                    "variables": {}
-                });
+                        "variables": {}
+                    });
 
-                let mut headers: Vec<(String, String)> = vec![];
-                if let Some(expressjs_cookie) = raw_value {
-                    let encoded =
-                        utf8_percent_encode(expressjs_cookie.as_ref(), &JWT_ESCAPED).to_string();
-                    headers.push((
-                        String::from("Cookie"),
-                        format!("appreciate-auth={}", encoded),
-                    ));
-                }
-                JsonCryptogramStep::build(ServiceName::Identity, MethodName::Lookup)
-                    .payload(payload)
-                    .postflight(Language::Object(vec![
-                        (
-                            String::from("q"),
-                            Language::Map(
-                                Box::new(Language::At(String::from("data"))),
-                                Box::new(Language::Map(
-                                    Box::new(Language::At(String::from("currentUser"))),
-                                    Box::new(Language::Map(
-                                        Box::new(Language::Map(
-                                            Box::new(Language::At(String::from(
-                                                "recommendationSeedPhrase",
-                                            ))),
-                                            Box::new(Language::Default(Box::new(Language::Const(
-                                                json!([]),
-                                            )))),
-                                        )),
-                                        Box::new(Language::Join(String::from(" "))),
-                                    )),
-                                )),
+                    let mut headers: Vec<(String, String)> = vec![];
+                    if let Some(expressjs_cookie) = raw_value {
+                        let encoded = utf8_percent_encode(expressjs_cookie.as_ref(), &JWT_ESCAPED)
+                            .to_string();
+                        headers.push((
+                            String::from("Cookie"),
+                            format!("appreciate-auth={}", encoded),
+                        ));
+                    }
+                    JsonCryptogramStep::build(ServiceName::Identity, MethodName::Lookup)
+                        .payload(payload)
+                        .postflight(Language::Object(vec![
+                            (
+                                String::from("q"),
+                                Language::At(String::from("data"))
+                                    .map(Language::At(String::from("currentUser")).map(
+                                        Language::At(String::from("recommendationSeedPhrase")),
+                                    ))
+                                    .map(Language::default(Language::Const(json!([]))))
+                                    .map(Language::Join(String::from(" "))),
                             ),
-                        ),
-                        (String::from("size"), Language::Const(json!(6))),
-                        (String::from("start"), Language::Const(json!(0))),
-                    ]))
-                    .headers(headers)
-                    .memoization_prefix(format!("{}-", owner_id.as_ref().unwrap()))
-                    .finish()
-            },
-            {
-                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
-                    .payload(json!({}))
-                    .postflight(Language::Object(vec![(
-                        String::from("product_variant_ids"),
-                        Language::At(String::from("product_variant_ids")),
-                    )]))
-                    .memoization_prefix(format!("{}-", owner_id.unwrap()))
-                    .finish()
-            },
-        ];
+                            (String::from("size"), Language::Const(json!(6))),
+                            (String::from("start"), Language::Const(json!(0))),
+                        ]))
+                        .headers(headers)
+                        .memoization_prefix(format!("{}-", owner_id.as_ref().unwrap()))
+                        .finish()
+                },
+                {
+                    JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+                        .payload(json!({}))
+                        .postflight(Language::Object(vec![(
+                            String::from("product_variant_ids"),
+                            Language::At(String::from("product_variant_ids")),
+                        )]))
+                        .memoization_prefix(format!("{}-", owner_id.unwrap()))
+                        .finish()
+                },
+            ];
         let next_start = format!("catalog:{}", size);
         (
             sources,
@@ -409,43 +399,31 @@ async fn get_explore(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
             .preflight(Language::Splat(vec![
-                Language::Map(
-                    Box::new(Language::Object(vec![
-                        (String::from("query"), Language::At(String::from("q"))),
-                        (
-                            String::from("page_size"),
-                            Language::At(String::from("size")),
-                        ),
-                    ])),
-                    Box::new(emit_user_action(EventType::Search)),
-                ),
+                Language::Object(vec![
+                    (String::from("query"), Language::At(String::from("q"))),
+                    (
+                        String::from("page_size"),
+                        Language::At(String::from("size")),
+                    ),
+                ])
+                .map(emit_user_action(EventType::Search)),
                 Language::Identity,
             ]))
             .postflight(Language::Splat(vec![
-                Language::Map(
-                    Box::new(Language::At(String::from("next_start"))),
-                    Box::new(Language::Set(String::from("next_start"))),
-                ),
-                Language::Map(
-                    Box::new(Language::At(String::from("has_more"))),
-                    Box::new(Language::Set(String::from("has_more"))),
-                ),
-                Language::Map(
-                    Box::new(Language::Object(vec![
-                        (
-                            String::from("product_variant_ids"),
-                            Language::At(String::from("product_variant_ids")),
-                        ),
-                        (
-                            String::from("length"),
-                            Language::Map(
-                                Box::new(Language::At(String::from("product_variant_ids"))),
-                                Box::new(Language::Length),
-                            ),
-                        ),
-                    ])),
-                    Box::new(emit_user_action(EventType::SearchResult)),
-                ),
+                Language::At(String::from("next_start"))
+                    .map(Language::Set(String::from("next_start"))),
+                Language::At(String::from("has_more")).map(Language::Set(String::from("has_more"))),
+                Language::Object(vec![
+                    (
+                        String::from("product_variant_ids"),
+                        Language::At(String::from("product_variant_ids")),
+                    ),
+                    (
+                        String::from("length"),
+                        Language::At(String::from("product_variant_ids")).map(Language::Length),
+                    ),
+                ])
+                .map(emit_user_action(EventType::SearchResult)),
                 Language::Object(vec![(
                     String::from("product_variant_ids"),
                     Language::At(String::from("product_variant_ids")),
@@ -482,38 +460,30 @@ async fn get_explore(
                                 ),
                                 (
                                     String::from("data"),
-                                    Language::Map(
-                                        Box::new(Language::At(String::from("product_variants"))),
-                                        Box::new(Language::Array(Box::new(Language::Object(
-                                            vec![
-                                                (
-                                                    String::from("brand_name"),
-                                                    Language::At(String::from(
-                                                        "brand_variant_name",
-                                                    )),
-                                                ),
-                                                (
-                                                    String::from("catalog_id"),
-                                                    Language::At(String::from("id")),
-                                                ),
-                                                (
-                                                    String::from("id"),
-                                                    Language::At(String::from("id")),
-                                                ),
-                                                (
-                                                    String::from("item_id"),
-                                                    Language::At(String::from("id")),
-                                                ),
-                                                (
-                                                    String::from("link"),
-                                                    Language::At(String::from("primary_image")),
-                                                ),
-                                                (
-                                                    String::from("title"),
-                                                    Language::At(String::from("name")),
-                                                ),
-                                            ],
-                                        )))),
+                                    Language::At(String::from("product_variants")).map(
+                                        Language::array(Language::Object(vec![
+                                            (
+                                                String::from("brand_name"),
+                                                Language::At(String::from("brand_variant_name")),
+                                            ),
+                                            (
+                                                String::from("catalog_id"),
+                                                Language::At(String::from("id")),
+                                            ),
+                                            (String::from("id"), Language::At(String::from("id"))),
+                                            (
+                                                String::from("item_id"),
+                                                Language::At(String::from("id")),
+                                            ),
+                                            (
+                                                String::from("link"),
+                                                Language::At(String::from("primary_image")),
+                                            ),
+                                            (
+                                                String::from("title"),
+                                                Language::At(String::from("name")),
+                                            ),
+                                        ])),
                                     ),
                                 ), // TODO: Delete this ASAP
                                 (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP

@@ -524,14 +524,12 @@ async fn routes_evaluate() {
         steps: vec![
             JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Search)
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
-                .postflight(Language::Map(
-                    Box::new(Language::At(String::from("results"))),
-                    Box::new(Language::Object(vec![
+                .postflight(Language::At(String::from("results")).map(Language::Object(vec![
                         (
                             String::from("ids"),
-                            Language::Array(Box::new(Language::At(String::from(
+                            Language::array(Language::At(String::from(
                                 "product_variant_id",
-                            )))),
+                            ))),
                         ),
                         (
                             String::from("results"),
@@ -540,7 +538,7 @@ async fn routes_evaluate() {
                             ),
                         ),
                     ])),
-                ))
+                )
                 .finish()
             ,
             JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
