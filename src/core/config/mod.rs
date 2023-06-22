@@ -32,12 +32,16 @@ pub enum MethodName {
     Explore,
     #[serde(alias = "search")]
     Search,
+    #[serde(alias = "search_history")]
+    SearchHistory,
     #[serde(alias = "lookup")]
     Lookup,
 }
 
 #[derive(Clone, Debug, Deserialize, Display, Eq, Hash, PartialEq)]
 pub enum ServiceName {
+    #[serde(rename(deserialize = "apex"))]
+    Apex,
     #[serde(rename(deserialize = "catalog"))]
     Catalog,
     #[serde(rename(deserialize = "identity"))]
