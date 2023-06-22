@@ -531,7 +531,13 @@ async fn post_suggestions(
     Ok(HttpResponse::Ok().json(&result))
 }
 
-async fn post_history(authorization: Option<Authorization>) -> Result<HttpResponse, ExploreError> {
+async fn post_history(
+    authorization: Option<Authorization>,
+    cache_state: Data<Mutex<MemoizationCache>>,
+    client_config: Data<HttpClientConfig>,
+    ctx: Data<TranslateContext>,
+    services: Data<Services>,
+) -> Result<HttpResponse, ExploreError> {
     let authorization: Authorization = authorization.unwrap_or(Authorization::empty());
     let owner_id = if let Authorization::Bearer(BearerFields { owner_id, .. }) = authorization {
         Some(owner_id)
@@ -539,9 +545,21 @@ async fn post_history(authorization: Option<Authorization>) -> Result<HttpRespon
         None
     };
 
-    log::info!("Emitting static history for {:?}", owner_id);
+    let cryptogram = JsonCryptogram {
+        steps: vec![
+            JsonCryptogramStep::build(ServiceName::Apex, MethodName::SearchHistory)
+                .payload(json!({ "owner_id": owner_id }))
+                .postflight(Language::Object(vec![(
+                    String::from("results"),
+                    Language::at("data"),
+                )]))
+                .finish(),
+        ],
+    };
 
-    Ok(HttpResponse::Ok().json(json!({
+    let live_client = LiveJsonClient::build(client_config.get_ref());
+
+    let default_fallback = json!({
         "results": [
             {
                 "id": "80A1B395-986A-4140-9C78-56D26EB6E25E",
@@ -560,7 +578,20 @@ async fn post_history(authorization: Option<Authorization>) -> Result<HttpRespon
                 "q": "Jean Louis Scherrer"
             },
         ]
-    })))
+    });
+
+    let (result, _) = do_evaluate(
+        ctx.get_ref(),
+        cache_state.into_inner(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await
+    .or_else(|_| Ok((default_fallback, JsonCryptogram { steps: vec![] })))
+    .map_err(ExploreError::Evaluate)?;
+    Ok(HttpResponse::Ok().json(&result))
 }
 
 pub fn configure(server: &mut web::ServiceConfig, hostname: String) {
