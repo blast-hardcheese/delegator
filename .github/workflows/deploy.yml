@@ -32,7 +32,7 @@ on:
 
 jobs:
   deploy:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@1d3a6d90c6dff1a586e7175115a0a435d4d912a3  # v1.0.2
     with:
       environment       : ${{ inputs.environment }}
       aws_region        : ${{ inputs.aws_region }}
@@ -46,7 +46,7 @@ jobs:
       CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
 
   release:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/sentry-api.yml@3e6542ca598cef504da493963458f9173f91f68c  # v1.0.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/sentry-api.yml@1d3a6d90c6dff1a586e7175115a0a435d4d912a3  # v1.0.2
     needs:
       - deploy
     with:

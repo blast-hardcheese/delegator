@@ -79,7 +79,7 @@ jobs:
 #          command: tarpaulin
 
   check-terraform:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@1d3a6d90c6dff1a586e7175115a0a435d4d912a3  # v1.0.2
     if: github.secret_source == 'Actions'  # Dependabot has no access to AWS_*
     with:
       environment: stag

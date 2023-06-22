@@ -36,7 +36,7 @@ env:
 jobs:
   docker-build-push:
     name: Build, push
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/docker-build-push.yml@1d3a6d90c6dff1a586e7175115a0a435d4d912a3  # v1.0.2
     with:
       image_name: delegator
       push      : true
@@ -70,7 +70,7 @@ jobs:
           version: delegator@${{ needs.docker-build-push.outputs.tag }}
 
   call-deploy-to-env:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@3e6542ca598cef504da493963458f9173f91f68c # v1.0.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/deploy.yml@1d3a6d90c6dff1a586e7175115a0a435d4d912a3  # v1.0.2
     needs:
       - docker-build-push
     with:
@@ -85,7 +85,7 @@ jobs:
       CI_ACCESS_TOKEN      : ${{ secrets.CI_ACCESS_TOKEN }}
 
   sentry-deploy:
-    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/sentry-api.yml@3e6542ca598cef504da493963458f9173f91f68c  # v1.0.1
+    uses: Appreciate-Stuff/appreciate-actions/.github/workflows/sentry-api.yml@1d3a6d90c6dff1a586e7175115a0a435d4d912a3  # v1.0.2
     needs:
       - docker-build-push
       - call-deploy-to-env
