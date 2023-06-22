@@ -589,7 +589,11 @@ async fn post_history(
         make_state(),
     )
     .await
-    .or_else(|_| Ok((default_fallback, JsonCryptogram { steps: vec![] })))
+    .or_else(|err| {
+        let msg = format!("{:?}", err);
+        sentry::capture_message(&msg, sentry::Level::Error);
+        Ok((default_fallback, JsonCryptogram { steps: vec![] }))
+    })
     .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }
