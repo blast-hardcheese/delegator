@@ -33,7 +33,7 @@ fn parse_at(input: &str) -> IResult<&str, Language> {
     let name = String::from(key);
     let term = match proj {
         None => Language::At(name),
-        Some(rest) => Language::Map(Box::new(Language::At(name)), Box::new(rest)),
+        Some(rest) => Language::At(name).map(rest),
     };
     Ok((input, term))
 }
@@ -111,10 +111,7 @@ fn test_parse_at() {
 #[test]
 fn test_parse_focus() {
     let prog = ".foo | .bar";
-    let expected = Language::Map(
-        Box::new(Language::At(String::from("foo"))),
-        Box::new(Language::At(String::from("bar"))),
-    );
+    let expected = Language::At(String::from("foo")).map(Language::At(String::from("bar")));
     let (input, result) = parse_at(prog).unwrap();
     assert_eq!(input, "");
     assert_eq!(result, expected);
@@ -133,7 +130,7 @@ fn test_parse_object() {
     let expected = vec![
         (
             String::from("foo"),
-            Language::Array(Box::new(Language::At(String::from("foo")))),
+            Language::array(Language::At(String::from("foo"))),
         ),
         (String::from("bar"), Language::At(String::from("bar"))),
     ];
@@ -147,10 +144,7 @@ fn test_parse_object() {
 fn test_parse_set_get() {
     let prog = r#".foo | set("foo"), { "bar": .bar, "foo": get("foo") }"#;
     let expected = Language::Splat(vec![
-        Language::Map(
-            Box::new(Language::At(String::from("foo"))),
-            Box::new(Language::Set(String::from("foo"))),
-        ),
+        Language::At(String::from("foo")).map(Language::Set(String::from("foo"))),
         Language::Object(vec![
             (String::from("bar"), Language::At(String::from("bar"))),
             (String::from("foo"), Language::Get(String::from("foo"))),
