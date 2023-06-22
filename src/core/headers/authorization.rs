@@ -56,8 +56,10 @@ impl FromRequest for Authorization {
                     .to_str()
                     .map_err(HeaderError::InvalidAuthorizationHeader)?;
                 match Vec::from_iter(value.splitn(2, ' ')).as_slice() {
-                    ["Bearer", token] => {
-                        if let Some(owner_id) = hmac_verify(String::from(*token)) {
+                    // s: is a leading signature of a "signed cookie" from express.js
+                    // We use it here as a sentinel to indicate legacy Bearer format
+                    ["Bearer", token] if token.starts_with("s:") => {
+                        if let Some(owner_id) = hmac_verify(String::from(*token)[2..].to_string()) {
                             Authorization::Bearer(BearerFields {
                                 owner_id,
                                 raw_value: String::from(*token),
