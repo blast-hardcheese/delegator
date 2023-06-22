@@ -56,6 +56,7 @@ pub enum Language {
     Map(Box<Language>, Box<Language>), // ... | ...
     Length,                            // [...] | size
     Join(String),                      // [...] | join(",")
+    Default(Box<Language>),
 }
 
 #[derive(Debug)]
@@ -206,6 +207,10 @@ pub fn step(
                     choices: None,
                 })
             }
+        },
+        Language::Default(prog) => match current {
+            Value::Null => step(ctx, prog, &Value::Null, state),
+            other => Ok(other.clone()),
         },
     }
 }
