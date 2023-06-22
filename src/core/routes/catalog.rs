@@ -338,8 +338,7 @@ async fn get_explore(
                 });
 
                 let mut headers: Vec<(String, String)> = vec![];
-                if let Some(jwt) = raw_value {
-                    let expressjs_cookie = format!("s:{}", jwt);
+                if let Some(expressjs_cookie) = raw_value {
                     let encoded =
                         utf8_percent_encode(expressjs_cookie.as_ref(), &JWT_ESCAPED).to_string();
                     headers.push((
