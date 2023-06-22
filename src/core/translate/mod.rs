@@ -59,6 +59,18 @@ pub enum Language {
     Default(Box<Language>),
 }
 
+impl Language {
+    pub fn array(arr: Language) -> Language {
+        Language::Array(Box::new(arr))
+    }
+    pub fn default(def: Language) -> Language {
+        Language::Default(Box::new(def))
+    }
+    pub fn map(&self, next: Language) -> Language {
+        Language::Map(Box::new(self.clone()), Box::new(next))
+    }
+}
+
 #[derive(Debug)]
 pub struct StepError {
     history: Vec<String>,
