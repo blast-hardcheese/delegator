@@ -20,9 +20,9 @@ pub enum EventEmissionError {
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum EventType {
-    #[serde(alias = "search")]
+    #[serde(name = "search")]
     Search,
-    #[serde(alias = "search_result")]
+    #[serde(name = "search_result")]
     SearchResult,
 }
 
