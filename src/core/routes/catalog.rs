@@ -243,12 +243,13 @@ async fn get_explore(
         }
     });
 
+    let search_id = req.search_id.unwrap_or(Uuid::new_v4());
     let emit_user_action = |et: EventType| {
         Language::EmitEvent(
             owner_id.clone(),
             events.user_action.clone(),
             et,
-            req.search_id.unwrap_or(Uuid::new_v4()),
+            search_id,
             page_context.clone(),
         )
     };
