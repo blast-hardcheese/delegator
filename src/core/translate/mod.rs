@@ -57,6 +57,7 @@ pub enum Language {
     Length,                            // [...] | size
     Join(String),                      // [...] | join(",")
     Default(Box<Language>),
+    Flatten,
 }
 
 impl Language {
@@ -232,6 +233,21 @@ pub fn step(
         Language::Default(prog) => match current {
             Value::Null => step(ctx, prog, &Value::Null, state),
             other => Ok(other.clone()),
+        },
+        Language::Flatten => match current {
+            Value::Array(vec) => {
+                let mut out: Vec<Value> = vec![];
+                for elem in vec.clone().iter_mut() {
+                    match elem {
+                        Value::Array(vec) => {
+                            out.append(vec);
+                        }
+                        _ => panic!("Child was not an array!"),
+                    }
+                }
+                Ok(Value::Array(out))
+            }
+            _ => panic!("Child was not an array!"),
         },
     }
 }
