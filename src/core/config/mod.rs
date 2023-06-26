@@ -21,6 +21,7 @@ use self::events::EventConfig;
 #[derive(Clone, Debug, Deserialize)]
 pub struct Virtualhosts {
     pub catalog: String,
+    pub closet: String,
     pub pricing: String,
 }
 
@@ -34,6 +35,8 @@ pub enum MethodName {
     Search,
     #[serde(alias = "search_history")]
     SearchHistory,
+    #[serde(alias = "list")]
+    List,
     #[serde(alias = "lookup")]
     Lookup,
 }
@@ -44,6 +47,8 @@ pub enum ServiceName {
     Apex,
     #[serde(rename(deserialize = "catalog"))]
     Catalog,
+    #[serde(rename(deserialize = "closet"))]
+    Closet,
     #[serde(rename(deserialize = "identity"))]
     Identity,
     #[serde(rename(deserialize = "pricing"))]
