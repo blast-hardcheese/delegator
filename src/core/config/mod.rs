@@ -34,6 +34,8 @@ pub enum MethodName {
     Search,
     #[serde(alias = "search_history")]
     SearchHistory,
+    #[serde(alias = "list")]
+    List,
     #[serde(alias = "lookup")]
     Lookup,
 }
