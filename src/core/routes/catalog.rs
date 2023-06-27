@@ -550,10 +550,6 @@ async fn post_history(
         steps: vec![
             JsonCryptogramStep::build(ServiceName::Apex, MethodName::SearchHistory)
                 .payload(json!({ "owner_id": owner_id }))
-                .postflight(Language::Object(vec![(
-                    String::from("results"),
-                    Language::at("data"),
-                )]))
                 .finish(),
         ],
     };
