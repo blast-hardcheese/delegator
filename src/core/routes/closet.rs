@@ -5,10 +5,10 @@ use actix_web::{
     HttpResponse,
 };
 use derive_more::Display;
+use iso8601::DateTime;
 use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
-use iso8601::DateTime;
 
 use crate::headers::authorization::{Authorization, BearerFields};
 
@@ -23,10 +23,9 @@ impl error::ResponseError for ClosetError {
 
 #[derive(Deserialize)]
 struct PostPaginateListsRequest {
-    #[serde(rename="type")]
+    #[serde(rename = "type")]
     list_type: String,
 }
-
 
 async fn post_paginate_lists(
     authorization: Option<Authorization>,
@@ -43,7 +42,11 @@ async fn post_paginate_lists(
         return Ok(HttpResponse::Unauthorized().json(json!({})));
     };
 
-    log::warn!("Stubbing out list pagination response for {}, lists of type {}", owner_id, req.list_type);
+    log::warn!(
+        "Stubbing out list pagination response for {}, lists of type {}",
+        owner_id,
+        req.list_type
+    );
     Ok(HttpResponse::Ok().json(json!(
         {
             "results": [
@@ -56,7 +59,6 @@ async fn post_paginate_lists(
         }
     )))
 }
-
 
 #[derive(Deserialize)]
 struct PostPaginateListRequest {}
