@@ -33,10 +33,8 @@ mime = "0.3.17"
 nom = { version = "7.1.3", features = [ "alloc" ] }
 once_cell = "1.18.0"
 percent-encoding = "2.3.0"
-sentry = { version = "0.31.5", features = ["default", "profiling"] }
-sentry-actix = "0.31.5"
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10.7"
 tokio = "1.28.2"
-uuid = { version = "1.3.4", features = ["v4"] }
+uuid = { version = "1.3.4", features = ["v4", "serde"] }

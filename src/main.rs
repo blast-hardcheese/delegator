@@ -46,7 +46,6 @@ async fn main() -> Result<()> {
         environment,
         events,
         http,
-        sentry,
         mut services,
         virtualhosts,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
@@ -72,20 +71,6 @@ async fn main() -> Result<()> {
         *scheme = new_scheme;
         *authority = new_authority;
     }
-
-    let _guard = sentry::init((
-        sentry.dsn,
-        sentry::ClientOptions {
-            environment: sentry.environment.map(|e| e.into()),
-            release: sentry.release.map(|r| r.into()),
-            session_mode: sentry::SessionMode::Request,
-            auto_session_tracking: true,
-            traces_sample_rate: 1.0,
-            enable_profiling: true,
-            profiles_sample_rate: 1.0,
-            ..Default::default()
-        },
-    ));
 
     // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
     // I suspect it's so we get error traces in Sentry. We may need to revisit this.
@@ -119,7 +104,6 @@ async fn main() -> Result<()> {
         App::new()
             .wrap(Logger::default().log_target("accesslog"))
             .wrap(cors)
-            .wrap(sentry_actix::Sentry::new())
             .app_data(Data::new(events.clone()))
             .app_data(Data::new(http.client.clone()))
             .app_data(Data::new(services.clone()))
