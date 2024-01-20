@@ -81,8 +81,6 @@ async fn main() -> Result<()> {
             session_mode: sentry::SessionMode::Request,
             auto_session_tracking: true,
             traces_sample_rate: 1.0,
-            enable_profiling: true,
-            profiles_sample_rate: 1.0,
             ..Default::default()
         },
     ));
