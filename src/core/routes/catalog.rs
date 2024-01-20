@@ -1,5 +1,4 @@
 use derive_more::Display;
-use sentry::Breadcrumb;
 use std::num::ParseIntError;
 use tokio::sync::Mutex;
 
@@ -46,14 +45,6 @@ enum ExploreError {
 
 impl JsonResponseError for ExploreError {
     fn error_as_json(&self) -> Value {
-        fn breadcrumb(msg: &str) -> Breadcrumb {
-            Breadcrumb {
-                message: Some(String::from(msg)),
-                ty: String::from("input"),
-                category: Some(String::from("error")),
-                ..Breadcrumb::default()
-            }
-        }
         fn err(msg: &str) -> Value {
             json!({
                "error": {
@@ -62,11 +53,7 @@ impl JsonResponseError for ExploreError {
             })
         }
         match self {
-            Self::InvalidPage(inner) => {
-                sentry::add_breadcrumb(breadcrumb("InvalidPage"));
-                sentry::capture_error(inner);
-                err("invalid_page")
-            }
+            Self::InvalidPage(_inner) => err("invalid_page"),
             Self::Evaluate(_inner) => {
                 json!(null) // NB: JsonResponseError is as good as I'm able to write it at this
                             // point, but this is an unfortunate edge case. error_response calls
@@ -81,15 +68,7 @@ impl error::ResponseError for ExploreError {
     fn error_response(&self) -> HttpResponse<BoxBody> {
         match self {
             Self::InvalidPage(_inner) => json_error_response(self),
-            Self::Evaluate(inner) => {
-                sentry::add_breadcrumb(Breadcrumb {
-                    message: Some(String::from("Error during catalog")),
-                    ty: String::from("evaluate_step"),
-                    category: Some(String::from("error")),
-                    ..Breadcrumb::default()
-                });
-                json_error_response(inner)
-            }
+            Self::Evaluate(inner) => json_error_response(inner),
         }
     }
 }
@@ -586,11 +565,7 @@ async fn post_history(
         make_state(),
     )
     .await
-    .or_else(|err| {
-        let msg = format!("{:?}", err);
-        sentry::capture_message(&msg, sentry::Level::Error);
-        Ok((default_fallback, JsonCryptogram { steps: vec![] }))
-    })
+    .or_else(|_err| Ok((default_fallback, JsonCryptogram { steps: vec![] })))
     .map_err(ExploreError::Evaluate)?;
     Ok(HttpResponse::Ok().json(&result))
 }

@@ -5,7 +5,6 @@ use actix_web::{
     HttpResponse,
 };
 use derive_more::Display;
-use sentry::Breadcrumb;
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::Mutex;
@@ -30,12 +29,6 @@ impl error::ResponseError for PricingError {
     fn error_response(&self) -> HttpResponse<BoxBody> {
         match self {
             Self::Evaluate(inner) => {
-                sentry::add_breadcrumb(Breadcrumb {
-                    message: Some(String::from("Error during pricing")),
-                    ty: String::from("evaluate_step"),
-                    category: Some(String::from("error")),
-                    ..Breadcrumb::default()
-                });
                 json_error_response(inner)
             }
         }
