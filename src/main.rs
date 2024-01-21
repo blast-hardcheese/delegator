@@ -36,8 +36,6 @@ impl From<InitErrors> for Error {
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-
     let path = std::env::args()
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
