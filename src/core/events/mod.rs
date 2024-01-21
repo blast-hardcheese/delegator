@@ -1,10 +1,6 @@
-use std::sync::Arc;
-
-use aws_sdk_sqs as sqs;
 use log::debug;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sqs::{error::SdkError, operation::send_message::SendMessageError};
 
 use crate::{
     config::events::EventTopic,
@@ -32,22 +28,12 @@ impl From<serde_json::Error> for EventEmissionError {
     }
 }
 
-impl From<SdkError<SendMessageError>> for EventEmissionError {
-    fn from(_value: SdkError<SendMessageError>) -> Self {
-        EventEmissionError::ClientError()
-    }
-}
-
 #[derive(Clone)]
-pub struct EventClient {
-    client: Arc<sqs::Client>,
-}
+pub struct EventClient {}
 
 impl EventClient {
     pub async fn new() -> EventClient {
-        let config = ::aws_config::load_from_env().await;
-        let client = Arc::new(sqs::Client::new(&config));
-        EventClient { client }
+        EventClient {}
     }
 
     pub fn emit(
@@ -68,22 +54,7 @@ impl EventClient {
         });
         match serde_json::to_string(&payload) {
             Ok(_payload) => {
-                let _client = self.client.clone();
                 let _topic = topic.clone();
-                tokio::spawn(async move {
-                    let resp = _client
-                        .send_message()
-                        .queue_url(_topic.queue_url.clone())
-                        .message_body(_payload)
-                        .send()
-                        .await;
-                    match resp {
-                        Ok(_) => {}
-                        Err(err) => {
-                            log::error!("SQS error: {:?}", err);
-                        }
-                    }
-                });
 
                 debug!(
                     "EventClient.emit({:?}, {:?}, {:?})",
