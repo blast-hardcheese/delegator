@@ -14,7 +14,7 @@ use delegator_core::{
 
 enum InitErrors {
     MissingConfigFile,
-    ErrorLoadingConfig(hocon::Error),
+    ErrorLoadingConfig(std::io::Error),
     ErrorLoadingRegistryService(String, String),
 }
 

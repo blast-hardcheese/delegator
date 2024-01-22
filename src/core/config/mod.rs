@@ -13,7 +13,6 @@ use actix_web::http::{
 use derive_more::Display;
 use hashbrown::HashMap;
 
-use hocon::{Error, HoconLoader};
 use serde::Deserialize;
 
 use self::events::EventConfig;
@@ -121,6 +120,9 @@ pub struct Configuration {
     pub events: EventConfig,
 }
 
-pub fn load_file(path: &str) -> Result<Configuration, Error> {
-    HoconLoader::new().load_file(path)?.hocon()?.resolve()
+pub fn load_file(path: &str) -> Result<Configuration, std::io::Error> {
+    let config_str = std::fs::read_to_string(path)?;
+    let config: Configuration = toml::from_str(&config_str)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+    Ok(config)
 }
