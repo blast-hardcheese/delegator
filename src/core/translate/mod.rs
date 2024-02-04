@@ -46,7 +46,7 @@ pub enum Language {
     Set(String),                     // ... | set("foo")
     Get(String),                     // get("bar") | ...
     Const(Value),                    // const(...)
-    Identity,
+    Identity,                        // .
     EmitEvent(
         Option<OwnerId>,
         EventTopic,
@@ -58,7 +58,7 @@ pub enum Language {
     Length,                            // [...] | size
     Join(String),                      // [...] | join(",")
     Default(Box<Language>),
-    Flatten,
+    Flatten,                           // ... | flatten | ...
 }
 
 impl Language {

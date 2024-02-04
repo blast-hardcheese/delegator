@@ -37,6 +37,33 @@ fn parse_at(input: &str) -> IResult<&str, Language> {
     Ok((input, term))
 }
 
+fn parse_default(input: &str) -> IResult<&str, Language> {
+    let leader = tag("default(");
+    let follower = char(')');
+
+    let (input, _) = leader(input)?;
+    let (input, prog) = parse_language(input)?;
+    let (input, _) = follower(input)?;
+
+    Ok((input, Language::Default(Box::new(prog))))
+}
+
+fn parse_flatten(input: &str) -> IResult<&str, Language> {
+    let leader = tag("flatten");
+
+    let (input, _) = leader(input)?;
+
+    Ok((input, Language::Flatten))
+}
+
+fn parse_identity(input: &str) -> IResult<&str, Language> {
+    let leader = char('.');
+
+    let (input, _) = leader(input)?;
+
+    Ok((input, Language::Identity))
+}
+
 fn parse_map(input: &str) -> IResult<&str, Language> {
     delimited(
         tag("map("),
@@ -89,6 +116,9 @@ fn parse_thunk(input: &str) -> IResult<&str, Language> {
         .or_else(|_| parse_object(input))
         .or_else(|_| parse_get(input))
         .or_else(|_| parse_set(input))
+        .or_else(|_| parse_default(input))
+        .or_else(|_| parse_flatten(input))
+        .or_else(|_| parse_identity(input))
 }
 
 pub fn parse_language(input: &str) -> IResult<&str, Language> {
