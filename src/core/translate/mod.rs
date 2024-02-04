@@ -9,6 +9,7 @@ use std::fmt::Display;
 use std::sync::{Arc, Mutex};
 
 use hashbrown::HashMap;
+use serde::Serialize;
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
@@ -81,7 +82,7 @@ impl Language {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct StepError {
     history: Vec<String>,
     choices: Option<Value>,

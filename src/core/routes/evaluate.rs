@@ -159,17 +159,31 @@ impl JsonResponseError for EvaluateError {
                }
             })
         }
+        fn err_value(msg: &Value) -> Value {
+            json!({
+               "error": {
+                   "kind": msg,
+               }
+            })
+        }
         match self {
-            Self::ClientError(_inner) => err("client"),
-            Self::InvalidJsonError(_inner) => err("protocol"),
-            Self::InvalidPayloadError(_inner) => err("payload"),
-            Self::UnknownStep(_num) => err("unknown_step"),
-            Self::InvalidStructure(_inner) => err("payload"),
-            Self::InvalidTransition(_steps, _step) => err("unknown_transition"),
-            Self::NetworkError(_context) => err("network"),
-            Self::NoStepsSpecified => err("steps"),
-            Self::UnknownMethod(_service_name, _method_name) => err("unknown_method"),
-            Self::UnknownService(_service_name) => err("unknown_service"),
+            Self::ClientError(inner) =>
+              err_value(&json!({"err": "client", "value": inner.to_string() })),
+            Self::InvalidJsonError(inner) =>
+              err_value(&json!({ "err": "protocol", "value": inner.to_string() })),
+            Self::InvalidPayloadError(inner) =>
+              err_value(&json!({"err": "payload", "value": inner.to_string()})),
+            Self::UnknownStep(num) => err(&format!("unknown_step: {}", num)),
+            Self::InvalidStructure(inner) =>
+              err_value(&json!({"err": "invalid_structure", "value": inner })),
+            Self::InvalidTransition(steps, step) =>
+              err_value(&json!({ "err": "unknown_transition", "steps": steps, "step": step })),
+            Self::NetworkError(context) => err_value(context),
+            Self::NoStepsSpecified => err("no_steps_specified"),
+            Self::UnknownMethod(service_name, method_name) =>
+              err(&format!("unknown_method: {}::{}", service_name, method_name)),
+            Self::UnknownService(service_name) =>
+              err(&format!("unknown_service: {}", service_name)),
             Self::UriBuilderError(_inner) => err("unknown_service"),
             Self::Utf8Error(_inner) => err("encoding"),
         }
