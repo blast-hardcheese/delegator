@@ -28,19 +28,25 @@ jobs:
       - name: Set up build cache
         uses: swatinem/rust-cache@988c164c3d0e93c4dbab36aaf5bbeb77425b2894  # v2.4.0
 
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.CI_APP_ID }}
+          private-key: ${{ secrets.CI_APP_PRIVKEY }}
+
       - name: Check workflow permissions
         id: check_permissions
         uses: scherermichael-oss/action-has-permission@136e061bfe093832d87f090dd768e14e27a740d3  # v1.0.6
         with:
           required-permission: write
         env:
-          GITHUB_TOKEN: ${{ secrets.CI_ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Run clippy check
         uses: actions-rs/clippy-check@b5b5f21f4797c02da247df37026fcd0a5024aa4d  # v1.0.7
         if: steps.check_permissions.outputs.has-permission
         with:
-          token: ${{ secrets.CI_ACCESS_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           args: -- -D warnings
 
       - name: Run tests
