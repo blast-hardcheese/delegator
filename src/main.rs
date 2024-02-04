@@ -7,15 +7,14 @@ use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use delegator_core::{
     cache::MemoizationCache,
-    config::{Configuration, ServiceDefinition, ServiceLocation},
+    config::Configuration,
     events::EventClient,
     translate::TranslateContext,
 };
 
 enum InitErrors {
     MissingConfigFile,
-    ErrorLoadingConfig(hocon::Error),
-    ErrorLoadingRegistryService(String, String),
+    ErrorLoadingConfig(std::io::Error),
 }
 
 impl From<InitErrors> for Error {
@@ -26,51 +25,21 @@ impl From<InitErrors> for Error {
                 "First argument to the server must be a path to the config file",
             ),
             InitErrors::ErrorLoadingConfig(err) => Error::new(ErrorKind::Other, err.to_string()),
-            InitErrors::ErrorLoadingRegistryService(env, service_name) => Error::new(
-                ErrorKind::Other,
-                format!("Missing registry service: {}:{}", env, service_name),
-            ),
         }
     }
 }
 
 #[actix_web::main]
 async fn main() -> Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-
     let path = std::env::args()
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
     let Configuration {
-        authorities,
-        environment,
         events,
         http,
-        mut services,
+        services,
         virtualhosts,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
-
-    for (service_name, service) in services.iter_mut() {
-        let ServiceDefinition::Rest {
-            scheme,
-            authority,
-            methods: _,
-        } = service;
-        let ServiceLocation {
-            scheme: new_scheme,
-            authority: new_authority,
-        } = authorities
-            .get(service_name)
-            .ok_or_else(|| {
-                InitErrors::ErrorLoadingRegistryService(
-                    environment.clone(),
-                    service_name.to_string(),
-                )
-            })?
-            .clone();
-        *scheme = new_scheme;
-        *authority = new_authority;
-    }
 
     // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
     // I suspect it's so we get error traces in Sentry. We may need to revisit this.
