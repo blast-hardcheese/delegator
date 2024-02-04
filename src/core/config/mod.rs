@@ -103,17 +103,7 @@ pub enum ServiceDefinition {
 pub type Services = HashMap<ServiceName, ServiceDefinition>;
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct ServiceLocation {
-    #[serde(with = "scheme")]
-    pub scheme: Scheme,
-    #[serde(with = "http_serde::authority")]
-    pub authority: Authority,
-}
-
-#[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
-    pub authorities: HashMap<ServiceName, ServiceLocation>,
-    pub environment: String,
     pub http: HttpConfig,
     pub services: Services,
     pub virtualhosts: Virtualhosts,
