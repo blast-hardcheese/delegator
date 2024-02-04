@@ -343,12 +343,12 @@ pub async fn do_evaluate<JC: JsonClient>(
         let new_payload = if let Some(cached_value) = maybe_cache {
             cached_value
         } else if service_name == "const" && method_name == "const" {
-          if let Some(pf) = postflight {
-              translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
-                  .map_err(EvaluateError::InvalidStructure)?
-          } else {
-              outgoing_payload
-          }
+            if let Some(pf) = postflight {
+                translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+                    .map_err(EvaluateError::InvalidStructure)?
+            } else {
+                outgoing_payload
+            }
         } else {
             let service = services
                 .get(service_name)
@@ -457,13 +457,13 @@ async fn routes_evaluate() {
         ],
     };
 
-    let mut services = {
+    let mut services: Services = {
         let s = DefaultHashBuilder::default();
         HashMap::with_hasher(s)
     };
 
     services.insert(
-        "catalog",
+        "catalog".to_string(),
         ServiceDefinition::Rest {
             scheme: Scheme::HTTP,
             authority: Authority::from_static("0:0"),
@@ -473,14 +473,14 @@ async fn routes_evaluate() {
                     HashMap::with_hasher(s)
                 };
                 methods.insert(
-                    "search",
+                    "search".to_string(),
                     MethodDefinition {
                         method: Method::POST,
                         path: PathAndQuery::from_static("/search/"),
                     },
                 );
                 methods.insert(
-                    "lookup",
+                    "lookup".to_string(),
                     MethodDefinition {
                         method: Method::POST,
                         path: PathAndQuery::from_static("/product_variants/"),

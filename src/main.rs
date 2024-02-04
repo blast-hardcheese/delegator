@@ -6,9 +6,7 @@ use std::{
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 use delegator_core::{
-    cache::MemoizationCache,
-    config::Configuration,
-    events::EventClient,
+    cache::MemoizationCache, config::Configuration, events::EventClient,
     translate::TranslateContext,
 };
 

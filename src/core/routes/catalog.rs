@@ -54,9 +54,7 @@ impl JsonResponseError for ExploreError {
         }
         match self {
             Self::InvalidPage(_inner) => err("invalid_page"),
-            Self::Evaluate(inner) => {
-              inner.into()
-            }
+            Self::Evaluate(inner) => inner.into(),
         }
     }
 }
@@ -78,15 +76,13 @@ async fn get_product_variant_image(
     services: Data<Services>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
-        steps: vec![
-            JsonCryptogramStep::build("catalog", "lookup")
-                .payload(json!({ "product_variant_ids": [pvid.0] }))
-                .postflight(Language::Object(vec![(
-                    String::from("results"),
-                    Language::at("product_variants"),
-                )]))
-                .finish(),
-        ],
+        steps: vec![JsonCryptogramStep::build("catalog", "lookup")
+            .payload(json!({ "product_variant_ids": [pvid.0] }))
+            .postflight(Language::Object(vec![(
+                String::from("results"),
+                Language::at("product_variants"),
+            )]))
+            .finish()],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
@@ -141,15 +137,13 @@ async fn get_product_variants(
     };
 
     let cryptogram = JsonCryptogram {
-        steps: vec![
-            JsonCryptogramStep::build("catalog", "lookup")
-                .payload(json!({ "product_variant_ids": ids }))
-                .postflight(Language::Object(vec![(
-                    String::from("results"),
-                    Language::at("product_variants"),
-                )]))
-                .finish(),
-        ],
+        steps: vec![JsonCryptogramStep::build("catalog", "lookup")
+            .payload(json!({ "product_variant_ids": ids }))
+            .postflight(Language::Object(vec![(
+                String::from("results"),
+                Language::at("product_variants"),
+            )]))
+            .finish()],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
@@ -418,38 +412,36 @@ async fn get_explore(
     let cryptogram = JsonCryptogram {
         steps: [
             sources,
-            vec![
-                JsonCryptogramStep::build("catalog", "lookup")
-                    .payload(json!({ "product_variant_ids": [] }))
-                    .postflight(Language::Object(
-                        [
-                            vec![
-                                (String::from("results"), Language::at("product_variants")),
-                                (
-                                    String::from("data"),
-                                    Language::at("product_variants").map(Language::array(
-                                        Language::Object(vec![
-                                            (
-                                                String::from("brand_name"),
-                                                Language::at("brand_variant_name"),
-                                            ),
-                                            (String::from("catalog_id"), Language::at("id")),
-                                            (String::from("id"), Language::at("id")),
-                                            (String::from("item_id"), Language::at("id")),
-                                            (String::from("link"), Language::at("primary_image")),
-                                            (String::from("title"), Language::at("name")),
-                                        ]),
-                                    )),
-                                ), // TODO: Delete this ASAP
-                                (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
-                                (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
-                            ],
-                            next_start,
-                        ]
-                        .concat(),
-                    ))
-                    .finish(),
-            ],
+            vec![JsonCryptogramStep::build("catalog", "lookup")
+                .payload(json!({ "product_variant_ids": [] }))
+                .postflight(Language::Object(
+                    [
+                        vec![
+                            (String::from("results"), Language::at("product_variants")),
+                            (
+                                String::from("data"),
+                                Language::at("product_variants").map(Language::array(
+                                    Language::Object(vec![
+                                        (
+                                            String::from("brand_name"),
+                                            Language::at("brand_variant_name"),
+                                        ),
+                                        (String::from("catalog_id"), Language::at("id")),
+                                        (String::from("id"), Language::at("id")),
+                                        (String::from("item_id"), Language::at("id")),
+                                        (String::from("link"), Language::at("primary_image")),
+                                        (String::from("title"), Language::at("name")),
+                                    ]),
+                                )),
+                            ), // TODO: Delete this ASAP
+                            (String::from("query_id"), Language::Const(json!(null))), // TODO: Delete this ASAP
+                            (String::from("status"), Language::Const(json!("ok"))), // TODO: Delete this ASAP
+                        ],
+                        next_start,
+                    ]
+                    .concat(),
+                ))
+                .finish()],
         ]
         .concat(),
     };
@@ -486,11 +478,9 @@ async fn post_suggestions(
     services: Data<Services>,
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
-        steps: vec![
-            JsonCryptogramStep::build("catalog", "autocomplete")
-                .payload(json!({ "q": req.q }))
-                .finish(),
-        ],
+        steps: vec![JsonCryptogramStep::build("catalog", "autocomplete")
+            .payload(json!({ "q": req.q }))
+            .finish()],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
@@ -523,11 +513,9 @@ async fn post_history(
     };
 
     let cryptogram = JsonCryptogram {
-        steps: vec![
-            JsonCryptogramStep::build("apex", "search_history")
-                .payload(json!({ "owner_id": owner_id }))
-                .finish(),
-        ],
+        steps: vec![JsonCryptogramStep::build("apex", "search_history")
+            .payload(json!({ "owner_id": owner_id }))
+            .finish()],
     };
 
     let live_client = LiveJsonClient::build(client_config.get_ref());
