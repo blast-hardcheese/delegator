@@ -486,7 +486,6 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_json",
- "serde_plain",
  "sha2",
  "tokio",
  "toml",
@@ -1136,15 +1135,6 @@ checksum = "176e46fa42316f18edd598015a5166857fc835ec732f5215eac6b7bdbf0a84f4"
 dependencies = [
  "itoa",
  "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde_plain"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce1fc6db65a611022b23a0dec6975d63fb80a302cb3388835ff02c097258d50"
-dependencies = [
  "serde",
 ]
 

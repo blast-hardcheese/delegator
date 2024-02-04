@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     cache::{hash_value, MemoizationCache},
-    config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
+    config::{HttpClientConfig, ServiceDefinition, Services},
     translate::{self, make_state, Language, StepError, TranslateContext},
 };
 
@@ -23,8 +23,8 @@ use super::errors::{json_error_response, JsonResponseError};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    pub service: ServiceName,
-    pub method: MethodName,
+    pub service: String,
+    pub method: String,
     pub payload: Value,
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
@@ -33,14 +33,17 @@ pub struct JsonCryptogramStep {
 }
 
 impl JsonCryptogramStep {
-    pub fn build(service: ServiceName, method: MethodName) -> JsonCryptogramStepNeedsPayload {
-        JsonCryptogramStepNeedsPayload { service, method }
+    pub fn build(service: &str, method: &str) -> JsonCryptogramStepNeedsPayload {
+        JsonCryptogramStepNeedsPayload {
+          service: service.to_string(),
+          method: method.to_string(),
+        }
     }
 }
 
 pub struct JsonCryptogramStepNeedsPayload {
-    service: ServiceName,
-    method: MethodName,
+    service: String,
+    method: String,
 }
 
 impl JsonCryptogramStepNeedsPayload {
@@ -141,8 +144,8 @@ pub enum EvaluateError {
     InvalidTransition(Vec<usize>, usize),
     NetworkError(Value),
     NoStepsSpecified,
-    UnknownMethod(ServiceName, MethodName),
-    UnknownService(ServiceName),
+    UnknownMethod(String, String),
+    UnknownService(String),
     UriBuilderError(error::HttpError),
     Utf8Error(Utf8Error),
 }
@@ -398,7 +401,6 @@ pub async fn do_evaluate<JC: JsonClient>(
 #[actix_web::test]
 async fn routes_evaluate() {
     use crate::config::MethodDefinition;
-    use crate::config::{MethodName, ServiceName};
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
     use hashbrown::HashMap;
@@ -406,7 +408,7 @@ async fn routes_evaluate() {
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Search)
+            JsonCryptogramStep::build("catalog", "search")
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
                 .postflight(Language::at("results").map(Language::Object(vec![
                         (
@@ -425,7 +427,7 @@ async fn routes_evaluate() {
                 )
                 .finish()
             ,
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+            JsonCryptogramStep::build("catalog", "lookup")
                 .payload(json!(null))
                 .postflight(Language::Object(vec![(
                     String::from("results"),
@@ -441,7 +443,7 @@ async fn routes_evaluate() {
     };
 
     services.insert(
-        ServiceName::Catalog,
+        "catalog",
         ServiceDefinition::Rest {
             scheme: Scheme::HTTP,
             authority: Authority::from_static("0:0"),
@@ -451,14 +453,14 @@ async fn routes_evaluate() {
                     HashMap::with_hasher(s)
                 };
                 methods.insert(
-                    MethodName::Search,
+                    "search",
                     MethodDefinition {
                         method: Method::POST,
                         path: PathAndQuery::from_static("/search/"),
                     },
                 );
                 methods.insert(
-                    MethodName::Lookup,
+                    "lookup",
                     MethodDefinition {
                         method: Method::POST,
                         path: PathAndQuery::from_static("/product_variants/"),
