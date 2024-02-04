@@ -1,5 +1,7 @@
 use crate::translate::Language;
 
+use crate::config::events::EventTopic;
+
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
 use nom::character::complete::{alpha1, alphanumeric1, char, one_of, space0};
@@ -76,6 +78,22 @@ fn parse_const(input: &str) -> IResult<&str, Language> {
     Ok((input, Language::Const(convert_wson_value(value))))
 }
 
+fn parse_emit(input: &str) -> IResult<&str, Language> {
+    let leader = tag("emit(");
+    let follower = char(')');
+
+    let (input, _) = leader(input)?;
+    let (input, topic) = quoted(input)?;
+    let (input, _) = follower(input)?;
+
+    Ok((
+        input,
+        Language::EmitEvent(EventTopic {
+            queue_url: topic.to_string(),
+        }),
+    ))
+}
+
 fn parse_default(input: &str) -> IResult<&str, Language> {
     let leader = tag("default(");
     let follower = char(')');
@@ -101,6 +119,14 @@ fn parse_identity(input: &str) -> IResult<&str, Language> {
     let (input, _) = leader(input)?;
 
     Ok((input, Language::Identity))
+}
+
+fn parse_length(input: &str) -> IResult<&str, Language> {
+    let leader = tag("length");
+
+    let (input, _) = leader(input)?;
+
+    Ok((input, Language::Length))
 }
 
 fn parse_map(input: &str) -> IResult<&str, Language> {
@@ -157,8 +183,10 @@ fn parse_thunk(input: &str) -> IResult<&str, Language> {
         .or_else(|_| parse_set(input))
         .or_else(|_| parse_const(input))
         .or_else(|_| parse_default(input))
+        .or_else(|_| parse_emit(input))
         .or_else(|_| parse_flatten(input))
         .or_else(|_| parse_identity(input))
+        .or_else(|_| parse_length(input))
 }
 
 pub fn parse_language(input: &str) -> IResult<&str, Language> {

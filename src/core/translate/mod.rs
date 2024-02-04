@@ -2,7 +2,7 @@ pub mod deserialize;
 pub mod parse;
 
 use crate::config::events::EventTopic;
-use crate::events::{EventClient, EventType, PageContext};
+use crate::events::EventClient;
 
 use std::borrow::{Borrow, BorrowMut};
 use std::fmt::Display;
@@ -48,17 +48,11 @@ pub enum Language {
     Const(Value),                      // const(...)
     Identity,                          // .
     Map(Box<Language>, Box<Language>), // ... | ...
-    Length,                            // [...] | size
+    Length,                            // [...] | length
     Join(String),                      // [...] | join(",")
     Default(Box<Language>),            // ... | default(<lang>)
     Flatten,                           // ... | flatten | ...
-    EmitEvent(
-        Option<OwnerId>,
-        EventTopic,
-        EventType,
-        ActionContextId,
-        PageContext,
-    ),
+    EmitEvent(EventTopic),             // ... | emit("topic")
 }
 
 impl Language {
@@ -184,16 +178,9 @@ pub fn step(
         }
         Language::Const(value) => Ok(value.clone()),
         Language::Identity => Ok(current.clone()),
-        Language::EmitEvent(owner_id, topic, et, action_context_id, page_context) => {
+        Language::EmitEvent(topic) => {
             if let Some(client) = &ctx.client {
-                client.emit(
-                    topic,
-                    owner_id,
-                    et,
-                    action_context_id,
-                    current,
-                    page_context,
-                );
+                client.emit(topic, current);
             }
             Ok(current.clone())
         }

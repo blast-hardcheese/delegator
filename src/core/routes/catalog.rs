@@ -11,12 +11,10 @@ use actix_web::{
 use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use uuid::Uuid;
 
 use crate::{
     cache::MemoizationCache,
     config::{events::EventConfig, HttpClientConfig, Services},
-    events::EventType,
     headers::authorization::Authorization,
     headers::{authorization::BearerFields, features::Features},
     translate::{make_state, Language, TranslateContext},
@@ -34,7 +32,6 @@ pub struct ExploreRequest {
     q: Option<String>,
     size: Option<i32>,
     start: Option<String>,
-    search_id: Option<Uuid>,
 }
 
 #[derive(Debug, Display)]
@@ -206,24 +203,6 @@ async fn get_explore(
         (None, None)
     };
 
-    let page_context = json!({
-        "owner_id": owner_id,
-        "features": {
-            "recommendations": features.recommendations,
-        }
-    });
-
-    let search_id = req.search_id.unwrap_or(Uuid::new_v4());
-    let emit_user_action = |et: EventType| {
-        Language::EmitEvent(
-            owner_id.clone(),
-            events.user_action.clone(),
-            et,
-            search_id,
-            page_context.clone(),
-        )
-    };
-
     let recommendations_flow =
         start == 0 && req.q.is_none() && owner_id.is_some() && features.recommendations;
 
@@ -377,7 +356,7 @@ async fn get_explore(
                     (String::from("query"), Language::at("q")),
                     (String::from("page_size"), Language::at("size")),
                 ])
-                .map(emit_user_action(EventType::Search)),
+                .map(Language::EmitEvent(events.user_action.clone())),
                 Language::Identity,
             ]))
             .postflight(Language::Splat(vec![
@@ -393,7 +372,7 @@ async fn get_explore(
                         Language::at("product_variant_ids").map(Language::Length),
                     ),
                 ])
-                .map(emit_user_action(EventType::SearchResult)),
+                .map(Language::EmitEvent(events.user_action.clone())),
                 Language::Object(vec![(
                     String::from("product_variant_ids"),
                     Language::at("product_variant_ids"),
