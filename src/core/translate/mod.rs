@@ -39,14 +39,19 @@ pub type ActionContextId = Uuid;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Language {
-    At(String),                      // .foo
-    Array(Box<Language>),            // map( ... )
-    Object(Vec<(String, Language)>), // { foo: .foo, bar: .bar  }
-    Splat(Vec<Language>),            // .foo, .bar
-    Set(String),                     // ... | set("foo")
-    Get(String),                     // get("bar") | ...
-    Const(Value),                    // const(...)
-    Identity,                        // .
+    At(String),                        // .foo
+    Array(Box<Language>),              // map( ... )
+    Object(Vec<(String, Language)>),   // { foo: .foo, bar: .bar  }
+    Splat(Vec<Language>),              // .foo, .bar
+    Set(String),                       // ... | set("foo")
+    Get(String),                       // get("bar") | ...
+    Const(Value),                      // const(...)
+    Identity,                          // .
+    Map(Box<Language>, Box<Language>), // ... | ...
+    Length,                            // [...] | size
+    Join(String),                      // [...] | join(",")
+    Default(Box<Language>),            // ... | default(<lang>)
+    Flatten,                           // ... | flatten | ...
     EmitEvent(
         Option<OwnerId>,
         EventTopic,
@@ -54,11 +59,6 @@ pub enum Language {
         ActionContextId,
         PageContext,
     ),
-    Map(Box<Language>, Box<Language>), // ... | ...
-    Length,                            // [...] | size
-    Join(String),                      // [...] | join(",")
-    Default(Box<Language>),
-    Flatten,                           // ... | flatten | ...
 }
 
 impl Language {

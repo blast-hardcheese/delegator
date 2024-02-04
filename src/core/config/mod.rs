@@ -7,8 +7,8 @@ mod stringy_duration;
 use std::time::Duration;
 
 use actix_web::http::{
-    Method,
     uri::{Authority, PathAndQuery, Scheme},
+    Method,
 };
 use hashbrown::HashMap;
 

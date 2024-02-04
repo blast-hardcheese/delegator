@@ -28,9 +28,7 @@ enum PricingError {
 impl error::ResponseError for PricingError {
     fn error_response(&self) -> HttpResponse<BoxBody> {
         match self {
-            Self::Evaluate(inner) => {
-                json_error_response(inner)
-            }
+            Self::Evaluate(inner) => json_error_response(inner),
         }
     }
 }
