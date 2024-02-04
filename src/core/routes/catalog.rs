@@ -54,11 +54,8 @@ impl JsonResponseError for ExploreError {
         }
         match self {
             Self::InvalidPage(_inner) => err("invalid_page"),
-            Self::Evaluate(_inner) => {
-                json!(null) // NB: JsonResponseError is as good as I'm able to write it at this
-                            // point, but this is an unfortunate edge case. error_response calls
-                            // the underlying json_error_response(inner) in this case, but we
-                            // still need to define it here.
+            Self::Evaluate(inner) => {
+              inner.into()
             }
         }
     }

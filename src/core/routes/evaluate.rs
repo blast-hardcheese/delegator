@@ -129,6 +129,45 @@ impl fmt::Display for EvaluateError {
     }
 }
 
+impl JsonResponseError for EvaluateError {
+    fn error_as_json(&self) -> Value {
+        serde_json::Value::from(self)
+    }
+}
+
+impl std::convert::From<&EvaluateError> for serde_json::Value {
+    fn from(error: &EvaluateError) -> Self {
+        match error {
+            EvaluateError::ClientError(inner) => {
+                json!({"err": "client", "value": inner.to_string()})
+            }
+            EvaluateError::InvalidJsonError(inner) => {
+                json!({"err": "protocol", "value": inner.to_string()})
+            }
+            EvaluateError::InvalidPayloadError(inner) => {
+                json!({"err": "payload", "value": inner.to_string()})
+            }
+            EvaluateError::UnknownStep(num) => json!({"err": "unknown_step", "num": num}),
+            EvaluateError::InvalidStructure(inner) => {
+                json!({"err": "invalid_structure", "value": inner})
+            }
+            EvaluateError::InvalidTransition(steps, step) => {
+                json!({"err": "unknown_transition", "steps": steps, "step": step})
+            }
+            EvaluateError::NetworkError(context) => context.clone(),
+            EvaluateError::NoStepsSpecified => json!({"err": "no_steps_specified"}),
+            EvaluateError::UnknownMethod(service_name, method_name) => {
+                json!({"err": "unknown_method", "service_name": service_name, "method_name": method_name})
+            }
+            EvaluateError::UnknownService(service_name) => {
+                json!({"err": "unknown_service", "service_name": service_name})
+            }
+            EvaluateError::UriBuilderError(_inner) => json!({"err": "uri_builder_error"}),
+            EvaluateError::Utf8Error(_inner) => json!({"err": "utf8_error"}),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct JsonCryptogram {
     pub steps: Vec<JsonCryptogramStep>,
@@ -148,46 +187,6 @@ pub enum EvaluateError {
     UnknownService(String),
     UriBuilderError(error::HttpError),
     Utf8Error(Utf8Error),
-}
-
-impl JsonResponseError for EvaluateError {
-    fn error_as_json(&self) -> Value {
-        fn err(msg: &str) -> Value {
-            json!({
-               "error": {
-                   "kind": String::from(msg),
-               }
-            })
-        }
-        fn err_value(msg: &Value) -> Value {
-            json!({
-               "error": {
-                   "kind": msg,
-               }
-            })
-        }
-        match self {
-            Self::ClientError(inner) =>
-              err_value(&json!({"err": "client", "value": inner.to_string() })),
-            Self::InvalidJsonError(inner) =>
-              err_value(&json!({ "err": "protocol", "value": inner.to_string() })),
-            Self::InvalidPayloadError(inner) =>
-              err_value(&json!({"err": "payload", "value": inner.to_string()})),
-            Self::UnknownStep(num) => err(&format!("unknown_step: {}", num)),
-            Self::InvalidStructure(inner) =>
-              err_value(&json!({"err": "invalid_structure", "value": inner })),
-            Self::InvalidTransition(steps, step) =>
-              err_value(&json!({ "err": "unknown_transition", "steps": steps, "step": step })),
-            Self::NetworkError(context) => err_value(context),
-            Self::NoStepsSpecified => err("no_steps_specified"),
-            Self::UnknownMethod(service_name, method_name) =>
-              err(&format!("unknown_method: {}::{}", service_name, method_name)),
-            Self::UnknownService(service_name) =>
-              err(&format!("unknown_service: {}", service_name)),
-            Self::UriBuilderError(_inner) => err("unknown_service"),
-            Self::Utf8Error(_inner) => err("encoding"),
-        }
-    }
 }
 
 impl ResponseError for EvaluateError {
