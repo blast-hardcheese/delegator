@@ -342,6 +342,13 @@ pub async fn do_evaluate<JC: JsonClient>(
         };
         let new_payload = if let Some(cached_value) = maybe_cache {
             cached_value
+        } else if service_name == "const" && method_name == "const" {
+          if let Some(pf) = postflight {
+              translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+                  .map_err(EvaluateError::InvalidStructure)?
+          } else {
+              outgoing_payload
+          }
         } else {
             let service = services
                 .get(service_name)
