@@ -29,14 +29,14 @@ pub struct JsonCryptogramStep {
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
     pub memoization_prefix: Option<String>,
-    pub headers: Vec<(String, String)>,
+    pub headers: Option<Vec<(String, String)>>,
 }
 
 impl JsonCryptogramStep {
     pub fn build(service: &str, method: &str) -> JsonCryptogramStepNeedsPayload {
         JsonCryptogramStepNeedsPayload {
-          service: service.to_string(),
-          method: method.to_string(),
+            service: service.to_string(),
+            method: method.to_string(),
         }
     }
 }
@@ -56,7 +56,7 @@ impl JsonCryptogramStepNeedsPayload {
                 preflight: None,
                 postflight: None,
                 memoization_prefix: None,
-                headers: vec![],
+                headers: None,
             },
         }
     }
@@ -95,24 +95,24 @@ impl JsonCryptogramStepBuilder {
     }
 
     pub fn header(self, key: String, value: String) -> JsonCryptogramStepBuilder {
-        let mut headers = self.inner.headers;
+        let mut headers = self.inner.headers.unwrap_or_default();
         headers.push((key, value));
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
-                headers,
+                headers: Some(headers),
                 ..self.inner
             },
         }
     }
 
     pub fn headers(self, pairs: Vec<(String, String)>) -> JsonCryptogramStepBuilder {
-        let mut headers = self.inner.headers;
+        let mut headers = self.inner.headers.unwrap_or_default();
         for pair in pairs {
             headers.push(pair);
         }
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
-                headers,
+                headers: Some(headers),
                 ..self.inner
             },
         }
@@ -372,7 +372,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                             method.method.clone(),
                             uri,
                             &outgoing_payload,
-                            headers.clone(),
+                            headers.clone().unwrap_or_default(),
                         )
                         .await?;
 
