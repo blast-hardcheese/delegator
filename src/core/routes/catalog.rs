@@ -416,13 +416,13 @@ async fn get_explore(
     };
 
     let cryptogram = JsonCryptogram {
-        steps: vec![
+        steps: [
             sources,
             vec![
                 JsonCryptogramStep::build("catalog", "lookup")
                     .payload(json!({ "product_variant_ids": [] }))
                     .postflight(Language::Object(
-                        vec![
+                        [
                             vec![
                                 (String::from("results"), Language::at("product_variants")),
                                 (
