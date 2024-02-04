@@ -15,7 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     cache::MemoizationCache,
-    config::{events::EventConfig, HttpClientConfig, MethodName, ServiceName, Services},
+    config::{events::EventConfig, HttpClientConfig, Services},
     events::EventType,
     headers::authorization::Authorization,
     headers::{authorization::BearerFields, features::Features},
@@ -54,11 +54,8 @@ impl JsonResponseError for ExploreError {
         }
         match self {
             Self::InvalidPage(_inner) => err("invalid_page"),
-            Self::Evaluate(_inner) => {
-                json!(null) // NB: JsonResponseError is as good as I'm able to write it at this
-                            // point, but this is an unfortunate edge case. error_response calls
-                            // the underlying json_error_response(inner) in this case, but we
-                            // still need to define it here.
+            Self::Evaluate(inner) => {
+              inner.into()
             }
         }
     }
@@ -82,7 +79,7 @@ async fn get_product_variant_image(
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+            JsonCryptogramStep::build("catalog", "lookup")
                 .payload(json!({ "product_variant_ids": [pvid.0] }))
                 .postflight(Language::Object(vec![(
                     String::from("results"),
@@ -145,7 +142,7 @@ async fn get_product_variants(
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+            JsonCryptogramStep::build("catalog", "lookup")
                 .payload(json!({ "product_variant_ids": ids }))
                 .postflight(Language::Object(vec![(
                     String::from("results"),
@@ -329,7 +326,7 @@ async fn get_explore(
                         format!("appreciate-auth={}", encoded),
                     ));
                 }
-                JsonCryptogramStep::build(ServiceName::Identity, MethodName::Lookup)
+                JsonCryptogramStep::build("identity", "lookup")
                     .payload(payload)
                     .postflight(Language::Object(vec![
                         (
@@ -350,7 +347,7 @@ async fn get_explore(
                     .finish()
             },
             {
-                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+                JsonCryptogramStep::build("catalog", "explore")
                     .payload(json!({}))
                     .postflight(Language::Object(vec![(
                         String::from("product_variant_ids"),
@@ -377,7 +374,7 @@ async fn get_explore(
         } else {
             start
         };
-        let source = JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Explore)
+        let source = JsonCryptogramStep::build("catalog", "explore")
             .payload(
                 json!({ "q": req.q, "start": new_start, "bucket_info": bucket_info, "size": size }),
             )
@@ -422,7 +419,7 @@ async fn get_explore(
         steps: vec![
             sources,
             vec![
-                JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+                JsonCryptogramStep::build("catalog", "lookup")
                     .payload(json!({ "product_variant_ids": [] }))
                     .postflight(Language::Object(
                         vec![
@@ -490,7 +487,7 @@ async fn post_suggestions(
 ) -> Result<HttpResponse, ExploreError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Autocomplete)
+            JsonCryptogramStep::build("catalog", "autocomplete")
                 .payload(json!({ "q": req.q }))
                 .finish(),
         ],
@@ -527,7 +524,7 @@ async fn post_history(
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Apex, MethodName::SearchHistory)
+            JsonCryptogramStep::build("apex", "search_history")
                 .payload(json!({ "owner_id": owner_id }))
                 .finish(),
         ],

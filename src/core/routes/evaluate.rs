@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     cache::{hash_value, MemoizationCache},
-    config::{HttpClientConfig, MethodName, ServiceDefinition, ServiceName, Services},
+    config::{HttpClientConfig, ServiceDefinition, Services},
     translate::{self, make_state, Language, StepError, TranslateContext},
 };
 
@@ -23,24 +23,27 @@ use super::errors::{json_error_response, JsonResponseError};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    pub service: ServiceName,
-    pub method: MethodName,
+    pub service: String,
+    pub method: String,
     pub payload: Value,
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
     pub memoization_prefix: Option<String>,
-    pub headers: Vec<(String, String)>,
+    pub headers: Option<Vec<(String, String)>>,
 }
 
 impl JsonCryptogramStep {
-    pub fn build(service: ServiceName, method: MethodName) -> JsonCryptogramStepNeedsPayload {
-        JsonCryptogramStepNeedsPayload { service, method }
+    pub fn build(service: &str, method: &str) -> JsonCryptogramStepNeedsPayload {
+        JsonCryptogramStepNeedsPayload {
+            service: service.to_string(),
+            method: method.to_string(),
+        }
     }
 }
 
 pub struct JsonCryptogramStepNeedsPayload {
-    service: ServiceName,
-    method: MethodName,
+    service: String,
+    method: String,
 }
 
 impl JsonCryptogramStepNeedsPayload {
@@ -53,7 +56,7 @@ impl JsonCryptogramStepNeedsPayload {
                 preflight: None,
                 postflight: None,
                 memoization_prefix: None,
-                headers: vec![],
+                headers: None,
             },
         }
     }
@@ -92,24 +95,24 @@ impl JsonCryptogramStepBuilder {
     }
 
     pub fn header(self, key: String, value: String) -> JsonCryptogramStepBuilder {
-        let mut headers = self.inner.headers;
+        let mut headers = self.inner.headers.unwrap_or_default();
         headers.push((key, value));
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
-                headers,
+                headers: Some(headers),
                 ..self.inner
             },
         }
     }
 
     pub fn headers(self, pairs: Vec<(String, String)>) -> JsonCryptogramStepBuilder {
-        let mut headers = self.inner.headers;
+        let mut headers = self.inner.headers.unwrap_or_default();
         for pair in pairs {
             headers.push(pair);
         }
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
-                headers,
+                headers: Some(headers),
                 ..self.inner
             },
         }
@@ -123,6 +126,45 @@ impl JsonCryptogramStepBuilder {
 impl fmt::Display for EvaluateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl JsonResponseError for EvaluateError {
+    fn error_as_json(&self) -> Value {
+        serde_json::Value::from(self)
+    }
+}
+
+impl std::convert::From<&EvaluateError> for serde_json::Value {
+    fn from(error: &EvaluateError) -> Self {
+        match error {
+            EvaluateError::ClientError(inner) => {
+                json!({"err": "client", "value": inner.to_string()})
+            }
+            EvaluateError::InvalidJsonError(inner) => {
+                json!({"err": "protocol", "value": inner.to_string()})
+            }
+            EvaluateError::InvalidPayloadError(inner) => {
+                json!({"err": "payload", "value": inner.to_string()})
+            }
+            EvaluateError::UnknownStep(num) => json!({"err": "unknown_step", "num": num}),
+            EvaluateError::InvalidStructure(inner) => {
+                json!({"err": "invalid_structure", "value": inner})
+            }
+            EvaluateError::InvalidTransition(steps, step) => {
+                json!({"err": "unknown_transition", "steps": steps, "step": step})
+            }
+            EvaluateError::NetworkError(context) => context.clone(),
+            EvaluateError::NoStepsSpecified => json!({"err": "no_steps_specified"}),
+            EvaluateError::UnknownMethod(service_name, method_name) => {
+                json!({"err": "unknown_method", "service_name": service_name, "method_name": method_name})
+            }
+            EvaluateError::UnknownService(service_name) => {
+                json!({"err": "unknown_service", "service_name": service_name})
+            }
+            EvaluateError::UriBuilderError(_inner) => json!({"err": "uri_builder_error"}),
+            EvaluateError::Utf8Error(_inner) => json!({"err": "utf8_error"}),
+        }
     }
 }
 
@@ -141,36 +183,10 @@ pub enum EvaluateError {
     InvalidTransition(Vec<usize>, usize),
     NetworkError(Value),
     NoStepsSpecified,
-    UnknownMethod(ServiceName, MethodName),
-    UnknownService(ServiceName),
+    UnknownMethod(String, String),
+    UnknownService(String),
     UriBuilderError(error::HttpError),
     Utf8Error(Utf8Error),
-}
-
-impl JsonResponseError for EvaluateError {
-    fn error_as_json(&self) -> Value {
-        fn err(msg: &str) -> Value {
-            json!({
-               "error": {
-                   "kind": String::from(msg),
-               }
-            })
-        }
-        match self {
-            Self::ClientError(_inner) => err("client"),
-            Self::InvalidJsonError(_inner) => err("protocol"),
-            Self::InvalidPayloadError(_inner) => err("payload"),
-            Self::UnknownStep(_num) => err("unknown_step"),
-            Self::InvalidStructure(_inner) => err("payload"),
-            Self::InvalidTransition(_steps, _step) => err("unknown_transition"),
-            Self::NetworkError(_context) => err("network"),
-            Self::NoStepsSpecified => err("steps"),
-            Self::UnknownMethod(_service_name, _method_name) => err("unknown_method"),
-            Self::UnknownService(_service_name) => err("unknown_service"),
-            Self::UriBuilderError(_inner) => err("unknown_service"),
-            Self::Utf8Error(_inner) => err("encoding"),
-        }
-    }
 }
 
 impl ResponseError for EvaluateError {
@@ -326,6 +342,13 @@ pub async fn do_evaluate<JC: JsonClient>(
         };
         let new_payload = if let Some(cached_value) = maybe_cache {
             cached_value
+        } else if service_name == "const" && method_name == "const" {
+          if let Some(pf) = postflight {
+              translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+                  .map_err(EvaluateError::InvalidStructure)?
+          } else {
+              outgoing_payload
+          }
         } else {
             let service = services
                 .get(service_name)
@@ -356,7 +379,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                             method.method.clone(),
                             uri,
                             &outgoing_payload,
-                            headers.clone(),
+                            headers.clone().unwrap_or_default(),
                         )
                         .await?;
 
@@ -398,7 +421,6 @@ pub async fn do_evaluate<JC: JsonClient>(
 #[actix_web::test]
 async fn routes_evaluate() {
     use crate::config::MethodDefinition;
-    use crate::config::{MethodName, ServiceName};
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
     use hashbrown::HashMap;
@@ -406,7 +428,7 @@ async fn routes_evaluate() {
 
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Search)
+            JsonCryptogramStep::build("catalog", "search")
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
                 .postflight(Language::at("results").map(Language::Object(vec![
                         (
@@ -425,7 +447,7 @@ async fn routes_evaluate() {
                 )
                 .finish()
             ,
-            JsonCryptogramStep::build(ServiceName::Catalog, MethodName::Lookup)
+            JsonCryptogramStep::build("catalog", "lookup")
                 .payload(json!(null))
                 .postflight(Language::Object(vec![(
                     String::from("results"),
@@ -441,7 +463,7 @@ async fn routes_evaluate() {
     };
 
     services.insert(
-        ServiceName::Catalog,
+        "catalog",
         ServiceDefinition::Rest {
             scheme: Scheme::HTTP,
             authority: Authority::from_static("0:0"),
@@ -451,14 +473,14 @@ async fn routes_evaluate() {
                     HashMap::with_hasher(s)
                 };
                 methods.insert(
-                    MethodName::Search,
+                    "search",
                     MethodDefinition {
                         method: Method::POST,
                         path: PathAndQuery::from_static("/search/"),
                     },
                 );
                 methods.insert(
-                    MethodName::Lookup,
+                    "lookup",
                     MethodDefinition {
                         method: Method::POST,
                         path: PathAndQuery::from_static("/product_variants/"),

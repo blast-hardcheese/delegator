@@ -486,11 +486,11 @@ dependencies = [
  "percent-encoding",
  "serde",
  "serde_json",
- "serde_plain",
  "sha2",
  "tokio",
  "toml",
  "uuid",
+ "wson",
 ]
 
 [[package]]
@@ -1140,15 +1140,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_plain"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce1fc6db65a611022b23a0dec6975d63fb80a302cb3388835ff02c097258d50"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1491,6 +1482,14 @@ name = "windows_x86_64_msvc"
 version = "0.48.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
+
+[[package]]
+name = "wson"
+version = "0.1.1"
+source = "git+https://github.com/blast-hardcheese/wson?branch=expose-json-function#b3d32bf1732d525081f398821f80c6ac0ebdd5a1"
+dependencies = [
+ "nom",
+]
 
 [[package]]
 name = "zerocopy"

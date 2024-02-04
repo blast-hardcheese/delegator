@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     cache::MemoizationCache,
-    config::{HttpClientConfig, MethodName, ServiceName, Services},
+    config::{HttpClientConfig, Services},
     translate::{make_state, TranslateContext},
 };
 
@@ -52,7 +52,7 @@ async fn post_resale_price(
 ) -> Result<HttpResponse, PricingError> {
     let cryptogram = JsonCryptogram {
         steps: vec![
-            JsonCryptogramStep::build(ServiceName::Pricing, MethodName::Lookup)
+            JsonCryptogramStep::build("pricing", "lookup")
             .payload(json!({ "brand": req.brand, "image_url": req.image_url, "q": req.q, "product_variant_id": req.product_variant_id, }))
             .finish()
         ],
