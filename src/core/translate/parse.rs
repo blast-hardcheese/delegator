@@ -7,6 +7,7 @@ use nom::combinator::{opt, recognize};
 use nom::multi::{many0_count, separated_list0, separated_list1};
 use nom::sequence::{delimited, pair, preceded};
 use nom::{IResult, Parser};
+use wson;
 
 fn identifier(input: &str) -> IResult<&str, &str> {
     recognize(pair(
@@ -37,12 +38,50 @@ fn parse_at(input: &str) -> IResult<&str, Language> {
     Ok((input, term))
 }
 
+fn convert_wson_value(json: wson::Value) -> serde_json::Value {
+    match json {
+        wson::Value::Null => serde_json::Value::Null,
+        wson::Value::True => serde_json::Value::Bool(true),
+        wson::Value::False => serde_json::Value::Bool(false),
+        wson::Value::Number(wson::number::Number::PositiveInteger(n)) => {
+            serde_json::Value::Number(n.into())
+        }
+        wson::Value::Number(wson::number::Number::NegativeInteger(n)) => {
+            serde_json::Value::Number(n.into())
+        }
+        wson::Value::Number(wson::number::Number::Float(n)) => {
+            let num = serde_json::Number::from_f64(n).unwrap();
+            serde_json::Value::Number(num)
+        }
+        wson::Value::String(s) => serde_json::Value::String(s),
+        wson::Value::Array(vec) => {
+            serde_json::Value::Array(vec.into_iter().map(convert_wson_value).collect())
+        }
+        wson::Value::Object(map) => serde_json::Value::Object(
+            map.into_iter()
+                .map(|(k, v)| (k, convert_wson_value(v)))
+                .collect(),
+        ),
+    }
+}
+
+fn parse_const(input: &str) -> IResult<&str, Language> {
+    let leader = tag("const(");
+    let follower = char(')');
+
+    let (input, _) = leader(input)?;
+    let (input, value) = wson::json(input)?;
+    let (input, _) = follower(input)?;
+
+    Ok((input, Language::Const(convert_wson_value(value))))
+}
+
 fn parse_default(input: &str) -> IResult<&str, Language> {
     let leader = tag("default(");
     let follower = char(')');
 
     let (input, _) = leader(input)?;
-    let (input, prog) = parse_language(input)?;
+    let (input, prog) = parse_thunk(input)?;
     let (input, _) = follower(input)?;
 
     Ok((input, Language::Default(Box::new(prog))))
@@ -116,6 +155,7 @@ fn parse_thunk(input: &str) -> IResult<&str, Language> {
         .or_else(|_| parse_object(input))
         .or_else(|_| parse_get(input))
         .or_else(|_| parse_set(input))
+        .or_else(|_| parse_const(input))
         .or_else(|_| parse_default(input))
         .or_else(|_| parse_flatten(input))
         .or_else(|_| parse_identity(input))
