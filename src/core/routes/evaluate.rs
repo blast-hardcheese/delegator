@@ -23,9 +23,9 @@ use super::errors::{json_error_response, JsonResponseError};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    pub service: String,
-    pub method: String,
-    pub payload: Value,
+    pub service: Option<String>,
+    pub method: Option<String>,
+    pub payload: Option<Value>,
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
     pub memoization_prefix: Option<String>,
@@ -50,9 +50,9 @@ impl JsonCryptogramStepNeedsPayload {
     pub fn payload(self, payload: Value) -> JsonCryptogramStepBuilder {
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
-                service: self.service,
-                method: self.method,
-                payload,
+                service: Some(self.service),
+                method: Some(self.method),
+                payload: Some(payload),
                 preflight: None,
                 postflight: None,
                 memoization_prefix: None,
@@ -318,7 +318,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let current_step = &cryptogram.steps[step];
         let service_name = &current_step.service;
         let method_name = &current_step.method;
-        let payload = &current_step.payload;
+        let payload = &current_step.payload.clone().unwrap_or(Value::Null);
         let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
         let memoization_prefix = &current_step.memoization_prefix;
@@ -342,14 +342,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         };
         let new_payload = if let Some(cached_value) = maybe_cache {
             cached_value
-        } else if service_name == "const" && method_name == "const" {
-            if let Some(pf) = postflight {
-                translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
-                    .map_err(EvaluateError::InvalidStructure)?
-            } else {
-                outgoing_payload
-            }
-        } else {
+        } else if let (Some(service_name), Some(method_name)) = (service_name, method_name) {
             let service = services
                 .get(service_name)
                 .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
@@ -399,18 +392,27 @@ pub async fn do_evaluate<JC: JsonClient>(
             } else {
                 new_payload
             }
+        } else if let Some(pf) = postflight {
+            translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+                .map_err(EvaluateError::InvalidStructure)?
+        } else {
+            outgoing_payload
         };
 
         let next_idx = step + 1;
-        if next_idx >= cryptogram.steps.len() {
-            return Ok((new_payload, cryptogram));
+        if next_idx < cryptogram.steps.len() {
+            if cryptogram.steps[next_idx].payload.is_some() {
+                println!(
+                    "Warning: Discarding payload for step {}: {:?}",
+                    next_idx, cryptogram.steps[next_idx].payload
+                );
+            }
+            cryptogram.steps[next_idx].payload = Some(new_payload);
+        } else {
+            final_result = Some(new_payload);
         }
 
-        cryptogram.steps[next_idx].payload = new_payload.clone();
-
-        final_result = Some(new_payload);
-
-        step += 1;
+        step = next_idx;
     }
 
     final_result
