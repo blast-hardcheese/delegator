@@ -532,20 +532,35 @@ async fn routes_evaluate() {
 
 async fn bound_function(
     ctx: Data<TranslateContext>,
+    input: Json<Value>,
     client_config: Data<HttpClientConfig>,
     cache_state: Data<Mutex<MemoizationCache>>,
     services: Data<Services>,
     edge_route: EdgeRoute,
 ) -> Result<HttpResponse, EvaluateError> {
     let live_client = LiveJsonClient::build(client_config.get_ref());
+    let translator_state = make_state();
 
+    let input = input.into_inner();
+    let mut cryptogram = edge_route.cryptogram;
+    if !cryptogram.steps.is_empty() && cryptogram.steps[0].preflight.is_some() {
+        let input = translate::step(
+            ctx.get_ref(),
+            &cryptogram.steps[0].preflight.clone().unwrap(),
+            &input,
+            translator_state.clone(),
+        )
+        .map_err(EvaluateError::InvalidStructure)?;
+        cryptogram.steps[0].payload = Some(input);
+        cryptogram.steps[0].preflight = None;
+    };
     let (result, _) = do_evaluate(
         ctx.get_ref(),
         cache_state.into_inner(),
-        edge_route.cryptogram,
+        cryptogram,
         live_client,
         services.get_ref(),
-        make_state(),
+        translator_state,
     )
     .await?;
     Ok(HttpResponse::Ok().json(&result))
@@ -561,11 +576,13 @@ pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
                 route,
                 web::post().to(
                     move |ctx: Data<TranslateContext>,
+                          input: Json<Value>,
                           client_config: Data<HttpClientConfig>,
                           cache_state: Data<Mutex<MemoizationCache>>,
                           services: Data<Services>| {
                         bound_function(
                             ctx,
+                            input,
                             client_config,
                             cache_state,
                             services,
