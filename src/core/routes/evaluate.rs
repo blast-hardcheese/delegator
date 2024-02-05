@@ -530,6 +530,52 @@ async fn routes_evaluate() {
     }
 }
 
+async fn bound_function(
+    ctx: Data<TranslateContext>,
+    client_config: Data<HttpClientConfig>,
+    cache_state: Data<Mutex<MemoizationCache>>,
+    services: Data<Services>,
+    edge_route: EdgeRoute,
+) -> Result<HttpResponse, EvaluateError> {
+    let live_client = LiveJsonClient::build(client_config.get_ref());
+
+    let (result, _) = do_evaluate(
+        ctx.get_ref(),
+        cache_state.into_inner(),
+        edge_route.cryptogram,
+        live_client,
+        services.get_ref(),
+        make_state(),
+    )
+    .await?;
+    Ok(HttpResponse::Ok().json(&result))
+}
+
 pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
+    let mut server = server;
+
+    for (host, vhost) in virtualhosts {
+        for (route, edge_route) in &vhost.routes {
+            let edge_route = edge_route.clone();
+            server = server.route(
+                route,
+                web::post().to(
+                    move |ctx: Data<TranslateContext>,
+                          client_config: Data<HttpClientConfig>,
+                          cache_state: Data<Mutex<MemoizationCache>>,
+                          services: Data<Services>| {
+                        bound_function(
+                            ctx,
+                            client_config,
+                            cache_state,
+                            services,
+                            edge_route.clone(),
+                        )
+                    },
+                ),
+            );
+        }
+    }
+
     server.route("/evaluate", web::post().to(evaluate));
 }
