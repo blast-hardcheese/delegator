@@ -185,8 +185,8 @@ fn parse_thunk(input: &str) -> IResult<&str, Language> {
         .or_else(|_| parse_default(input))
         .or_else(|_| parse_emit(input))
         .or_else(|_| parse_flatten(input))
-        .or_else(|_| parse_identity(input))
         .or_else(|_| parse_length(input))
+        .or_else(|_| parse_identity(input))
 }
 
 pub fn parse_language(input: &str) -> IResult<&str, Language> {
