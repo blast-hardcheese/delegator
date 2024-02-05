@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use actix_web::{
     body::BoxBody,
     error::{self, PayloadError},
+    guard,
     http::{Method, Uri},
     web::{self, Data, Json},
     HttpResponse, ResponseError,
@@ -10,12 +11,17 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{fmt, str::Utf8Error, sync::Arc, time::Duration};
+use std::{
+    fmt,
+    str::{FromStr, Utf8Error},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::Mutex;
 
 use crate::{
     cache::{hash_value, MemoizationCache},
-    config::{HttpClientConfig, ServiceDefinition, Services},
+    config::{EdgeRoute, HttpClientConfig, ServiceDefinition, Services, Virtualhosts},
     translate::{self, make_state, Language, StepError, TranslateContext},
 };
 
@@ -23,9 +29,9 @@ use super::errors::{json_error_response, JsonResponseError};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogramStep {
-    pub service: String,
-    pub method: String,
-    pub payload: Value,
+    pub service: Option<String>,
+    pub method: Option<String>,
+    pub payload: Option<Value>,
     pub preflight: Option<Language>,
     pub postflight: Option<Language>,
     pub memoization_prefix: Option<String>,
@@ -50,9 +56,9 @@ impl JsonCryptogramStepNeedsPayload {
     pub fn payload(self, payload: Value) -> JsonCryptogramStepBuilder {
         JsonCryptogramStepBuilder {
             inner: JsonCryptogramStep {
-                service: self.service,
-                method: self.method,
-                payload,
+                service: Some(self.service),
+                method: Some(self.method),
+                payload: Some(payload),
                 preflight: None,
                 postflight: None,
                 memoization_prefix: None,
@@ -168,9 +174,17 @@ impl std::convert::From<&EvaluateError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogram {
     pub steps: Vec<JsonCryptogramStep>,
+}
+
+impl FromStr for JsonCryptogram {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
 }
 
 #[derive(Debug)]
@@ -318,7 +332,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let current_step = &cryptogram.steps[step];
         let service_name = &current_step.service;
         let method_name = &current_step.method;
-        let payload = &current_step.payload;
+        let payload = &current_step.payload.clone().unwrap_or(Value::Null);
         let preflight = &current_step.preflight;
         let postflight = &current_step.postflight;
         let memoization_prefix = &current_step.memoization_prefix;
@@ -342,14 +356,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         };
         let new_payload = if let Some(cached_value) = maybe_cache {
             cached_value
-        } else if service_name == "const" && method_name == "const" {
-            if let Some(pf) = postflight {
-                translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
-                    .map_err(EvaluateError::InvalidStructure)?
-            } else {
-                outgoing_payload
-            }
-        } else {
+        } else if let (Some(service_name), Some(method_name)) = (service_name, method_name) {
             let service = services
                 .get(service_name)
                 .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
@@ -359,6 +366,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                     scheme,
                     authority,
                     methods,
+                    ..
                 } => {
                     let method = methods.get(method_name).ok_or_else(|| {
                         EvaluateError::UnknownMethod(
@@ -399,18 +407,27 @@ pub async fn do_evaluate<JC: JsonClient>(
             } else {
                 new_payload
             }
+        } else if let Some(pf) = postflight {
+            translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+                .map_err(EvaluateError::InvalidStructure)?
+        } else {
+            outgoing_payload
         };
 
         let next_idx = step + 1;
-        if next_idx >= cryptogram.steps.len() {
-            return Ok((new_payload, cryptogram));
+        if next_idx < cryptogram.steps.len() {
+            if cryptogram.steps[next_idx].payload.is_some() {
+                println!(
+                    "Warning: Discarding payload for step {}: {:?}",
+                    next_idx, cryptogram.steps[next_idx].payload
+                );
+            }
+            cryptogram.steps[next_idx].payload = Some(new_payload);
+        } else {
+            final_result = Some(new_payload);
         }
 
-        cryptogram.steps[next_idx].payload = new_payload.clone();
-
-        final_result = Some(new_payload);
-
-        step += 1;
+        step = next_idx;
     }
 
     final_result
@@ -488,6 +505,7 @@ async fn routes_evaluate() {
                 );
                 methods
             },
+            virtualhosts: None,
         },
     );
 
@@ -513,6 +531,70 @@ async fn routes_evaluate() {
     }
 }
 
-pub fn configure(server: &mut web::ServiceConfig) {
+async fn bound_function(
+    ctx: Data<TranslateContext>,
+    input: Json<Value>,
+    client_config: Data<HttpClientConfig>,
+    cache_state: Data<Mutex<MemoizationCache>>,
+    services: Data<Services>,
+    edge_route: EdgeRoute,
+) -> Result<HttpResponse, EvaluateError> {
+    let live_client = LiveJsonClient::build(client_config.get_ref());
+    let translator_state = make_state();
+
+    let input = input.into_inner();
+    let mut cryptogram = edge_route.cryptogram;
+    if !cryptogram.steps.is_empty() && cryptogram.steps[0].preflight.is_some() {
+        let input = translate::step(
+            ctx.get_ref(),
+            &cryptogram.steps[0].preflight.clone().unwrap(),
+            &input,
+            translator_state.clone(),
+        )
+        .map_err(EvaluateError::InvalidStructure)?;
+        cryptogram.steps[0].payload = Some(input);
+        cryptogram.steps[0].preflight = None;
+    };
+    let (result, _) = do_evaluate(
+        ctx.get_ref(),
+        cache_state.into_inner(),
+        cryptogram,
+        live_client,
+        services.get_ref(),
+        translator_state,
+    )
+    .await?;
+    Ok(HttpResponse::Ok().json(&result))
+}
+
+pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
+    let mut server = server;
+
+    for (_name, vhost) in virtualhosts {
+        let host_route = || web::route().guard(guard::Host(vhost.hostname.clone()));
+        for (route, edge_route) in &vhost.routes {
+            let edge_route = edge_route.clone();
+            server = server.route(
+                route,
+                host_route().guard(guard::Post()).to(
+                    move |ctx: Data<TranslateContext>,
+                          input: Json<Value>,
+                          client_config: Data<HttpClientConfig>,
+                          cache_state: Data<Mutex<MemoizationCache>>,
+                          services: Data<Services>| {
+                        bound_function(
+                            ctx,
+                            input,
+                            client_config,
+                            cache_state,
+                            services,
+                            edge_route.clone(),
+                        )
+                    },
+                ),
+            );
+        }
+    }
+
     server.route("/evaluate", web::post().to(evaluate));
 }
