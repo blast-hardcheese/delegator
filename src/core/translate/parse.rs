@@ -26,18 +26,17 @@ fn quoted(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
+fn parse_group(input: &str) -> IResult<&str, Language> {
+    delimited(
+        delimited(space0, char('('), space0),
+        parse_thunk,
+        delimited(space0, char(')'), space0),
+    )(input)
+}
+
 fn parse_at(input: &str) -> IResult<&str, Language> {
-    let mut leader = preceded(char('.'), identifier);
-    let mut focus = opt(preceded(delimited(space0, char('|'), space0), parse_thunk));
-
-    let (input, key) = leader(input)?;
-    let (input, proj) = focus(input)?;
-
-    let term = match proj {
-        None => Language::at(key),
-        Some(rest) => Language::at(key).map(rest),
-    };
-    Ok((input, term))
+    let (input, token) = preceded(char('.'), identifier)(input)?;
+    Ok((input, Language::At(token.to_string())))
 }
 
 fn convert_wson_value(json: wson::Value) -> serde_json::Value {
@@ -121,12 +120,42 @@ fn parse_identity(input: &str) -> IResult<&str, Language> {
     Ok((input, Language::Identity))
 }
 
+fn parse_join(input: &str) -> IResult<&str, Language> {
+    let leader = tag("join(");
+    let follower = char(')');
+
+    let (input, _) = leader(input)?;
+    let (input, inner) = quoted(input)?;
+    let (input, _) = follower(input)?;
+
+    Ok((input, Language::Join(inner.to_string())))
+}
+
 fn parse_length(input: &str) -> IResult<&str, Language> {
     let leader = tag("length");
 
     let (input, _) = leader(input)?;
 
     Ok((input, Language::Length))
+}
+
+fn parse_tostring(input: &str) -> IResult<&str, Language> {
+    let leader = tag("tostring");
+
+    let (input, _) = leader(input)?;
+
+    Ok((input, Language::ToString))
+}
+
+fn parse_list(input: &str) -> IResult<&str, Language> {
+    delimited(
+        delimited(space0, char('['), space0),
+        Parser::map(
+            separated_list0(delimited(space0, char(','), space0), parse_thunk),
+            Language::List,
+        ),
+        delimited(space0, char(']'), space0),
+    )(input)
 }
 
 fn parse_map(input: &str) -> IResult<&str, Language> {
@@ -176,8 +205,10 @@ fn parse_set(input: &str) -> IResult<&str, Language> {
 }
 
 fn parse_thunk(input: &str) -> IResult<&str, Language> {
-    parse_at(input)
+    let (input, thunk) = parse_group(input)
+        .or_else(|_| parse_at(input))
         .or_else(|_| parse_map(input))
+        .or_else(|_| parse_list(input))
         .or_else(|_| parse_object(input))
         .or_else(|_| parse_get(input))
         .or_else(|_| parse_set(input))
@@ -185,8 +216,20 @@ fn parse_thunk(input: &str) -> IResult<&str, Language> {
         .or_else(|_| parse_default(input))
         .or_else(|_| parse_emit(input))
         .or_else(|_| parse_flatten(input))
+        .or_else(|_| parse_join(input))
         .or_else(|_| parse_length(input))
-        .or_else(|_| parse_identity(input))
+        .or_else(|_| parse_tostring(input))
+        .or_else(|_| parse_identity(input))?;
+
+    let (input, next) = opt(preceded(delimited(space0, char('|'), space0), parse_thunk))(input)?;
+
+    let result = if let Some(proj) = next {
+        thunk.map(proj)
+    } else {
+        thunk
+    };
+
+    Ok((input, result))
 }
 
 pub fn parse_language(input: &str) -> IResult<&str, Language> {
@@ -209,7 +252,7 @@ fn test_parse_at() {
 fn test_parse_focus() {
     let prog = ".foo | .bar";
     let expected = Language::at("foo").map(Language::at("bar"));
-    let (input, result) = parse_at(prog).unwrap();
+    let (input, result) = parse_thunk(prog).unwrap();
     assert_eq!(input, "");
     assert_eq!(result, expected);
 }

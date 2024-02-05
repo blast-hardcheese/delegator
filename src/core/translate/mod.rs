@@ -42,6 +42,7 @@ pub enum Language {
     At(String),                        // .foo
     Array(Box<Language>),              // map( ... )
     Object(Vec<(String, Language)>),   // { foo: .foo, bar: .bar  }
+    List(Vec<Language>),               // [ .foo, .bar, .baz ]
     Splat(Vec<Language>),              // .foo, .bar
     Set(String),                       // ... | set("foo")
     Get(String),                       // get("bar") | ...
@@ -52,6 +53,7 @@ pub enum Language {
     Join(String),                      // [...] | join(",")
     Default(Box<Language>),            // ... | default(<lang>)
     Flatten,                           // ... | flatten | ...
+    ToString,                          // ... | tostring | ...
     EmitEvent(EventTopic),             // ... | emit("topic")
 }
 
@@ -151,6 +153,12 @@ pub fn step(
                 .map(|(k, v)| step(ctx, v, current, state.clone()).map(|v| (k.clone(), v)))
                 .collect::<Result<Map<String, Value>, StepError>>()?,
         )),
+        Language::List(elems) => Ok(Value::Array(
+            elems
+                .iter()
+                .map(|v| step(ctx, v, current, state.clone()))
+                .collect::<Result<Vec<Value>, StepError>>()?,
+        )),
         Language::Splat(each) => {
             let result = each
                 .iter()
@@ -191,6 +199,7 @@ pub fn step(
         Language::Length => match current {
             Value::Array(vec) => Ok(Value::Number(serde_json::Number::from(vec.len()))),
             Value::Object(map) => Ok(Value::Number(serde_json::Number::from(map.len()))),
+            Value::String(x) => Ok(Value::Number(serde_json::Number::from(x.len()))),
             other => {
                 log::warn!("Attempted to call size on an unsized object: {:?}", other);
                 Ok(Value::Null)
@@ -236,6 +245,16 @@ pub fn step(
                 Ok(Value::Array(out))
             }
             _ => panic!("Child was not an array!"),
+        },
+        Language::ToString => match current {
+            Value::String(value) => Ok(Value::String(value.to_string())),
+            other => match serde_json::to_string(other) {
+                Ok(value) => Ok(Value::String(value.to_string())),
+                Err(_err) => Err(StepError {
+                    history: vec![],
+                    choices: None,
+                }),
+            },
         },
     }
 }
