@@ -12,18 +12,12 @@ use actix_web::http::{
 };
 use hashbrown::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use toml;
 
 use self::events::EventConfig;
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct Virtualhosts {
-    pub catalog: String,
-    pub closet: String,
-    pub pricing: String,
-}
+use crate::routes::evaluate::JsonCryptogram;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HttpClientConfig {
@@ -66,17 +60,42 @@ pub enum ServiceDefinition {
         #[serde(with = "http_serde::authority")]
         authority: Authority,
         methods: HashMap<String, MethodDefinition>,
+        virtualhosts: Option<Vec<String>>,
     },
 }
 
+fn decode_cryptogram<'de, D>(deserializer: D) -> Result<JsonCryptogram, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error;
+    use std::str::FromStr;
+
+    let s = String::deserialize(deserializer)?;
+    JsonCryptogram::from_str(&s).map_err(Error::custom)
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct EdgeRoute {
+    #[serde(deserialize_with = "decode_cryptogram")]
+    pub cryptogram: JsonCryptogram,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Virtualhost {
+    pub host: String,
+    pub routes: HashMap<String, EdgeRoute>,
+}
+
 pub type Services = HashMap<String, ServiceDefinition>;
+pub type Virtualhosts = HashMap<String, Virtualhost>;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
     pub http: HttpConfig,
     pub services: Services,
-    pub virtualhosts: Virtualhosts,
     pub events: EventConfig,
+    pub virtualhosts: Virtualhosts,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, std::io::Error> {

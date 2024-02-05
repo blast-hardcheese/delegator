@@ -10,12 +10,17 @@ use actix_web::{
 use awc::error::{JsonPayloadError, SendRequestError};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{fmt, str::Utf8Error, sync::Arc, time::Duration};
+use std::{
+    fmt,
+    str::{FromStr, Utf8Error},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::Mutex;
 
 use crate::{
     cache::{hash_value, MemoizationCache},
-    config::{HttpClientConfig, ServiceDefinition, Services},
+    config::{EdgeRoute, HttpClientConfig, ServiceDefinition, Services, Virtualhosts},
     translate::{self, make_state, Language, StepError, TranslateContext},
 };
 
@@ -168,9 +173,17 @@ impl std::convert::From<&EvaluateError> for serde_json::Value {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogram {
     pub steps: Vec<JsonCryptogramStep>,
+}
+
+impl FromStr for JsonCryptogram {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        serde_json::from_str(s)
+    }
 }
 
 #[derive(Debug)]
@@ -352,6 +365,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                     scheme,
                     authority,
                     methods,
+                    ..
                 } => {
                     let method = methods.get(method_name).ok_or_else(|| {
                         EvaluateError::UnknownMethod(
@@ -490,6 +504,7 @@ async fn routes_evaluate() {
                 );
                 methods
             },
+            virtualhosts: None,
         },
     );
 
@@ -515,6 +530,6 @@ async fn routes_evaluate() {
     }
 }
 
-pub fn configure(server: &mut web::ServiceConfig) {
+pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
     server.route("/evaluate", web::post().to(evaluate));
 }

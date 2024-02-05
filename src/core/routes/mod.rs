@@ -1,10 +1,10 @@
 use actix_web::web;
 
-use crate::config::Virtualhosts;
-
 pub mod errors;
 pub mod evaluate;
 
+use crate::config::Virtualhosts;
+
 pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
-    server.configure(evaluate::configure);
+    server.configure(|server| evaluate::configure(server, virtualhosts));
 }
