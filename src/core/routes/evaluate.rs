@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use actix_web::{
     body::BoxBody,
     error::{self, PayloadError},
+    guard,
     http::{Method, Uri},
     web::{self, Data, Json},
     HttpResponse, ResponseError,
@@ -569,12 +570,13 @@ async fn bound_function(
 pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
     let mut server = server;
 
-    for (host, vhost) in virtualhosts {
+    for (_name, vhost) in virtualhosts {
+        let host_route = || web::route().guard(guard::Host(vhost.hostname.clone()));
         for (route, edge_route) in &vhost.routes {
             let edge_route = edge_route.clone();
             server = server.route(
                 route,
-                web::post().to(
+                host_route().guard(guard::Post()).to(
                     move |ctx: Data<TranslateContext>,
                           input: Json<Value>,
                           client_config: Data<HttpClientConfig>,

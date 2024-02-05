@@ -83,7 +83,7 @@ pub struct EdgeRoute {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Virtualhost {
-    pub host: String,
+    pub hostname: String,
     pub routes: HashMap<String, EdgeRoute>,
 }
 
