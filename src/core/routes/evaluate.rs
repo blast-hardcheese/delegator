@@ -16,11 +16,12 @@ use tokio::sync::Mutex;
 use crate::{
     cache::{hash_value, MemoizationCache},
     config::{EdgeRoute, HttpClientConfig, ServiceDefinition, Services, Virtualhosts},
-    translate::{self, make_state, StepError, TranslateContext},
 };
 
-use super::super::model::cryptogram::JsonCryptogram;
-use super::errors::{json_error_response, JsonResponseError};
+use json_adapter::language::{make_state, State, StepError, TranslateContext};
+
+use crate::model::cryptogram::JsonCryptogram;
+use crate::routes::errors::{json_error_response, JsonResponseError};
 
 impl fmt::Display for EvaluateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -203,7 +204,7 @@ pub async fn do_evaluate<JC: JsonClient>(
     mut cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
-    translator_state: translate::State,
+    translator_state: State,
 ) -> Result<(Value, JsonCryptogram), EvaluateError> {
     let mut final_result: Option<Value> = None;
 
@@ -219,7 +220,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let headers = &current_step.headers;
 
         let outgoing_payload = if let Some(pf) = preflight {
-            translate::step(ctx, pf, payload, translator_state.clone())
+            json_adapter::language::step(ctx, pf, payload, translator_state.clone())
                 .map_err(EvaluateError::InvalidStructure)?
         } else {
             payload.clone()
@@ -272,7 +273,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                         .await?;
 
                     if let Some(pf) = postflight {
-                        translate::step(ctx, pf, &result, translator_state.clone())
+                        json_adapter::language::step(ctx, pf, &result, translator_state.clone())
                             .map_err(EvaluateError::InvalidStructure)?
                     } else {
                         result
@@ -288,7 +289,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                 new_payload
             }
         } else if let Some(pf) = postflight {
-            translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+            json_adapter::language::step(ctx, pf, &outgoing_payload, translator_state.clone())
                 .map_err(EvaluateError::InvalidStructure)?
         } else {
             outgoing_payload
@@ -318,19 +319,21 @@ pub async fn do_evaluate<JC: JsonClient>(
 #[actix_web::test]
 async fn routes_evaluate() {
     use crate::config::MethodDefinition;
+    use crate::model::cryptogram::JsonCryptogramStep;
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
     use hashbrown::HashMap;
+    use json_adapter::language::Language;
     use serde_json::json;
 
     let cryptogram = JsonCryptogram {
         steps: vec![
             JsonCryptogramStep::build("catalog", "search")
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
-                .postflight(Language::at("results").map(Language::Object(vec![
+                .postflight(Language::at("results").and_then(Language::Object(vec![
                         (
                             String::from("ids"),
-                            Language::array(Language::at(
+                            Language::map(Language::at(
                                 "product_variant_id",
                             )),
                         ),
@@ -425,7 +428,7 @@ async fn bound_function(
     let input = input.into_inner();
     let mut cryptogram = edge_route.cryptogram;
     if !cryptogram.steps.is_empty() && cryptogram.steps[0].preflight.is_some() {
-        let input = translate::step(
+        let input = json_adapter::language::step(
             ctx.get_ref(),
             &cryptogram.steps[0].preflight.clone().unwrap(),
             &input,

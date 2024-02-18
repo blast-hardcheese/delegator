@@ -479,6 +479,7 @@ dependencies = [
  "hmac",
  "http-serde",
  "iso8601",
+ "json-adapter",
  "log",
  "mime",
  "nom",
@@ -772,6 +773,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab46a6e9526ddef3ae7f787c06f0f2600639ba80ea3eade3d8e670a2230f51d6"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "json-adapter"
+version = "0.1.0"
+source = "git+https://github.com/blast-hardcheese/json-adapter#53509659724233ddba5b861a1b3d65392b5f5f25"
+dependencies = [
+ "hashbrown",
+ "log",
+ "nom",
+ "serde",
+ "serde_json",
+ "wson",
 ]
 
 [[package]]

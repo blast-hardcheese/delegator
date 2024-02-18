@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::str::FromStr;
 
-use crate::translate::Language;
+use json_adapter::language::Language;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct JsonCryptogram {

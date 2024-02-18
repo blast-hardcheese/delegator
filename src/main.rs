@@ -1,14 +1,10 @@
-use std::{
-    io::{Error, ErrorKind, Result},
-    sync::Arc,
-};
+use std::io::{Error, ErrorKind, Result};
 
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
-use delegator_core::{
-    cache::MemoizationCache, config::Configuration, events::EventClient,
-    translate::TranslateContext,
-};
+use delegator_core::{cache::MemoizationCache, config::Configuration};
+
+use json_adapter::language::TranslateContext;
 
 enum InitErrors {
     MissingConfigFile,
@@ -44,12 +40,12 @@ async fn main() -> Result<()> {
     std::env::set_var("RUST_BACKTRACE", "1");
     println!("Preparing to bind to {}:{}", http.host, http.port);
 
-    let event_client = {
-        let client = EventClient::new().await;
-        Arc::new(client)
-    };
+    // let event_client = {
+    //     let client = EventClient::new().await;
+    //     Arc::new(client)
+    // };
 
-    let ctx = TranslateContext::build(event_client);
+    let ctx = TranslateContext::build(());
 
     HttpServer::new(move || {
         // let allowed_origins = http.cors.clone();
