@@ -17,7 +17,7 @@ use serde::{Deserialize, Deserializer};
 use toml;
 
 use self::events::EventConfig;
-use crate::routes::evaluate::JsonCryptogram;
+use crate::model::cryptogram::JsonCryptogram;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HttpClientConfig {

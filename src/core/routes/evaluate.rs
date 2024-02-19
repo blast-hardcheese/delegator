@@ -9,125 +9,19 @@ use actix_web::{
     HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
-use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{
-    fmt,
-    str::{FromStr, Utf8Error},
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt, str::Utf8Error, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 use crate::{
     cache::{hash_value, MemoizationCache},
     config::{EdgeRoute, HttpClientConfig, ServiceDefinition, Services, Virtualhosts},
-    translate::{self, make_state, Language, StepError, TranslateContext},
 };
 
-use super::errors::{json_error_response, JsonResponseError};
+use json_adapter::language::{make_state, State, StepError, TranslateContext};
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct JsonCryptogramStep {
-    pub service: Option<String>,
-    pub method: Option<String>,
-    pub payload: Option<Value>,
-    pub preflight: Option<Language>,
-    pub postflight: Option<Language>,
-    pub memoization_prefix: Option<String>,
-    pub headers: Option<Vec<(String, String)>>,
-}
-
-impl JsonCryptogramStep {
-    pub fn build(service: &str, method: &str) -> JsonCryptogramStepNeedsPayload {
-        JsonCryptogramStepNeedsPayload {
-            service: service.to_string(),
-            method: method.to_string(),
-        }
-    }
-}
-
-pub struct JsonCryptogramStepNeedsPayload {
-    service: String,
-    method: String,
-}
-
-impl JsonCryptogramStepNeedsPayload {
-    pub fn payload(self, payload: Value) -> JsonCryptogramStepBuilder {
-        JsonCryptogramStepBuilder {
-            inner: JsonCryptogramStep {
-                service: Some(self.service),
-                method: Some(self.method),
-                payload: Some(payload),
-                preflight: None,
-                postflight: None,
-                memoization_prefix: None,
-                headers: None,
-            },
-        }
-    }
-}
-
-pub struct JsonCryptogramStepBuilder {
-    inner: JsonCryptogramStep,
-}
-
-impl JsonCryptogramStepBuilder {
-    pub fn preflight(self, preflight: Language) -> JsonCryptogramStepBuilder {
-        JsonCryptogramStepBuilder {
-            inner: JsonCryptogramStep {
-                preflight: Some(preflight),
-                ..self.inner
-            },
-        }
-    }
-
-    pub fn postflight(self, postflight: Language) -> JsonCryptogramStepBuilder {
-        JsonCryptogramStepBuilder {
-            inner: JsonCryptogramStep {
-                postflight: Some(postflight),
-                ..self.inner
-            },
-        }
-    }
-
-    pub fn memoization_prefix(self, prefix: String) -> JsonCryptogramStepBuilder {
-        JsonCryptogramStepBuilder {
-            inner: JsonCryptogramStep {
-                memoization_prefix: Some(prefix),
-                ..self.inner
-            },
-        }
-    }
-
-    pub fn header(self, key: String, value: String) -> JsonCryptogramStepBuilder {
-        let mut headers = self.inner.headers.unwrap_or_default();
-        headers.push((key, value));
-        JsonCryptogramStepBuilder {
-            inner: JsonCryptogramStep {
-                headers: Some(headers),
-                ..self.inner
-            },
-        }
-    }
-
-    pub fn headers(self, pairs: Vec<(String, String)>) -> JsonCryptogramStepBuilder {
-        let mut headers = self.inner.headers.unwrap_or_default();
-        for pair in pairs {
-            headers.push(pair);
-        }
-        JsonCryptogramStepBuilder {
-            inner: JsonCryptogramStep {
-                headers: Some(headers),
-                ..self.inner
-            },
-        }
-    }
-
-    pub fn finish(self) -> JsonCryptogramStep {
-        self.inner
-    }
-}
+use crate::model::cryptogram::JsonCryptogram;
+use crate::routes::errors::{json_error_response, JsonResponseError};
 
 impl fmt::Display for EvaluateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -171,19 +65,6 @@ impl std::convert::From<&EvaluateError> for serde_json::Value {
             EvaluateError::UriBuilderError(_inner) => json!({"err": "uri_builder_error"}),
             EvaluateError::Utf8Error(_inner) => json!({"err": "utf8_error"}),
         }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct JsonCryptogram {
-    pub steps: Vec<JsonCryptogramStep>,
-}
-
-impl FromStr for JsonCryptogram {
-    type Err = serde_json::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        serde_json::from_str(s)
     }
 }
 
@@ -323,7 +204,7 @@ pub async fn do_evaluate<JC: JsonClient>(
     mut cryptogram: JsonCryptogram,
     json_client: JC,
     services: &Services,
-    translator_state: translate::State,
+    translator_state: State,
 ) -> Result<(Value, JsonCryptogram), EvaluateError> {
     let mut final_result: Option<Value> = None;
 
@@ -339,7 +220,7 @@ pub async fn do_evaluate<JC: JsonClient>(
         let headers = &current_step.headers;
 
         let outgoing_payload = if let Some(pf) = preflight {
-            translate::step(ctx, pf, payload, translator_state.clone())
+            json_adapter::language::step(ctx, pf, payload, translator_state.clone())
                 .map_err(EvaluateError::InvalidStructure)?
         } else {
             payload.clone()
@@ -392,7 +273,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                         .await?;
 
                     if let Some(pf) = postflight {
-                        translate::step(ctx, pf, &result, translator_state.clone())
+                        json_adapter::language::step(ctx, pf, &result, translator_state.clone())
                             .map_err(EvaluateError::InvalidStructure)?
                     } else {
                         result
@@ -408,7 +289,7 @@ pub async fn do_evaluate<JC: JsonClient>(
                 new_payload
             }
         } else if let Some(pf) = postflight {
-            translate::step(ctx, pf, &outgoing_payload, translator_state.clone())
+            json_adapter::language::step(ctx, pf, &outgoing_payload, translator_state.clone())
                 .map_err(EvaluateError::InvalidStructure)?
         } else {
             outgoing_payload
@@ -438,19 +319,21 @@ pub async fn do_evaluate<JC: JsonClient>(
 #[actix_web::test]
 async fn routes_evaluate() {
     use crate::config::MethodDefinition;
+    use crate::model::cryptogram::JsonCryptogramStep;
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
     use hashbrown::HashMap;
+    use json_adapter::language::Language;
     use serde_json::json;
 
     let cryptogram = JsonCryptogram {
         steps: vec![
             JsonCryptogramStep::build("catalog", "search")
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
-                .postflight(Language::at("results").map(Language::Object(vec![
+                .postflight(Language::at("results").and_then(Language::Object(vec![
                         (
                             String::from("ids"),
-                            Language::array(Language::at(
+                            Language::map(Language::at(
                                 "product_variant_id",
                             )),
                         ),
@@ -545,7 +428,7 @@ async fn bound_function(
     let input = input.into_inner();
     let mut cryptogram = edge_route.cryptogram;
     if !cryptogram.steps.is_empty() && cryptogram.steps[0].preflight.is_some() {
-        let input = translate::step(
+        let input = json_adapter::language::step(
             ctx.get_ref(),
             &cryptogram.steps[0].preflight.clone().unwrap(),
             &input,
