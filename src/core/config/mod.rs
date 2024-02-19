@@ -1,21 +1,10 @@
-pub mod http_method;
-pub mod path_and_query;
-pub mod scheme;
 mod stringy_duration;
 
 use std::time::Duration;
 
-use actix_web::http::{
-    uri::{Authority, PathAndQuery, Scheme},
-    Method,
-};
-use hashbrown::HashMap;
-
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 use toml;
-
-use crate::model::cryptogram::JsonCryptogram;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct HttpClientConfig {
@@ -34,65 +23,8 @@ pub struct HttpConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct MethodDefinition {
-    #[serde(with = "path_and_query")]
-    pub path: PathAndQuery,
-    #[serde(with = "http_method")]
-    pub method: Method,
-}
-
-/* ServiceDefinition
- *
- * This enumeration is intended to support multiple transport protocols in the future,
- * so the `protocol` field must be set to `rest` for the time being.
- *
- * NB: Attempting to use "untagged" deserializing obscured underlying errors.
- */
-#[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "protocol")]
-pub enum ServiceDefinition {
-    #[serde(rename(serialize = "rest", deserialize = "rest"))]
-    Rest {
-        #[serde(with = "scheme")]
-        scheme: Scheme,
-        #[serde(with = "http_serde::authority")]
-        authority: Authority,
-        methods: HashMap<String, MethodDefinition>,
-        virtualhosts: Option<Vec<String>>,
-    },
-}
-
-fn decode_cryptogram<'de, D>(deserializer: D) -> Result<JsonCryptogram, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    use serde::de::Error;
-    use std::str::FromStr;
-
-    let s = String::deserialize(deserializer)?;
-    JsonCryptogram::from_str(&s).map_err(Error::custom)
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct EdgeRoute {
-    #[serde(deserialize_with = "decode_cryptogram")]
-    pub cryptogram: JsonCryptogram,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct Virtualhost {
-    pub hostname: String,
-    pub routes: HashMap<String, EdgeRoute>,
-}
-
-pub type Services = HashMap<String, ServiceDefinition>;
-pub type Virtualhosts = HashMap<String, Virtualhost>;
-
-#[derive(Clone, Debug, Deserialize)]
 pub struct Configuration {
     pub http: HttpConfig,
-    pub services: Services,
-    pub virtualhosts: Virtualhosts,
 }
 
 pub fn load_file(path: &str) -> Result<Configuration, std::io::Error> {

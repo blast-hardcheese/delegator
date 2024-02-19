@@ -2,9 +2,7 @@ use std::io::{Error, ErrorKind, Result};
 
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
-use delegator_core::{cache::MemoizationCache, config::Configuration};
-
-use json_adapter::language::TranslateContext;
+use delegator_core::config::Configuration;
 
 enum InitErrors {
     MissingConfigFile,
@@ -30,16 +28,12 @@ async fn main() -> Result<()> {
         .ok_or(InitErrors::MissingConfigFile)?;
     let Configuration {
         http,
-        services,
-        virtualhosts,
     } = delegator_core::config::load_file(path.as_str()).map_err(InitErrors::ErrorLoadingConfig)?;
 
     // This is from the Sentry docs, https://docs.sentry.io/platforms/rust/guides/actix-web/
     // I suspect it's so we get error traces in Sentry. We may need to revisit this.
     std::env::set_var("RUST_BACKTRACE", "1");
     println!("Preparing to bind to {}:{}", http.host, http.port);
-
-    let ctx = TranslateContext::build(());
 
     HttpServer::new(move || {
         // let allowed_origins = http.cors.clone();
@@ -62,10 +56,7 @@ async fn main() -> Result<()> {
             .wrap(Logger::default().log_target("accesslog"))
             .wrap(cors)
             .app_data(Data::new(http.client.clone()))
-            .app_data(Data::new(services.clone()))
-            .app_data(Data::new(ctx.clone()))
-            .app_data(Data::new(MemoizationCache::new()))
-            .configure(|server| delegator_core::routes::configure(server, &virtualhosts))
+            .configure(delegator_core::routes::configure)
     })
     .bind((http.host, http.port))?
     .run()

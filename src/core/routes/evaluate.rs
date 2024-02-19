@@ -3,22 +3,15 @@ use async_trait::async_trait;
 use actix_web::{
     body::BoxBody,
     error::{self, PayloadError},
-    guard,
-    http::{Method, Uri},
+    http::{uri::Authority, Method, Uri},
     web::{self, Data, Json},
     HttpResponse, ResponseError,
 };
 use awc::error::{JsonPayloadError, SendRequestError};
 use serde_json::{json, Value};
-use std::{fmt, str::Utf8Error, sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::{fmt, str::Utf8Error};
 
-use crate::{
-    cache::{hash_value, MemoizationCache},
-    config::{EdgeRoute, HttpClientConfig, ServiceDefinition, Services, Virtualhosts},
-};
-
-use json_adapter::language::{make_state, State, StepError, TranslateContext};
+use crate::config::HttpClientConfig;
 
 use crate::model::cryptogram::Cryptogram;
 use crate::routes::errors::{json_error_response, JsonResponseError};
@@ -47,18 +40,7 @@ impl std::convert::From<&EvaluateError> for serde_json::Value {
             EvaluateError::InvalidPayloadError(inner) => {
                 json!({"err": "payload", "value": inner.to_string()})
             }
-            EvaluateError::UnknownStep(num) => json!({"err": "unknown_step", "num": num}),
-            EvaluateError::InvalidStructure(inner) => {
-                json!({"err": "invalid_structure", "value": inner})
-            }
-            EvaluateError::InvalidTransition(steps, step) => {
-                json!({"err": "unknown_transition", "steps": steps, "step": step})
-            }
             EvaluateError::NetworkError(context) => context.clone(),
-            EvaluateError::NoStepsSpecified => json!({"err": "no_steps_specified"}),
-            EvaluateError::UnknownMethod(service_name, method_name) => {
-                json!({"err": "unknown_method", "service_name": service_name, "method_name": method_name})
-            }
             EvaluateError::UnknownService(service_name) => {
                 json!({"err": "unknown_service", "service_name": service_name})
             }
@@ -73,12 +55,7 @@ pub enum EvaluateError {
     ClientError(SendRequestError),
     InvalidJsonError(JsonPayloadError),
     InvalidPayloadError(PayloadError),
-    UnknownStep(usize),
-    InvalidStructure(StepError),
-    InvalidTransition(Vec<usize>, usize),
     NetworkError(Value),
-    NoStepsSpecified,
-    UnknownMethod(String, String),
     UnknownService(String),
     UriBuilderError(error::HttpError),
     Utf8Error(Utf8Error),
@@ -91,23 +68,12 @@ impl ResponseError for EvaluateError {
 }
 
 async fn evaluate(
-    ctx: Data<TranslateContext>,
     cryptogram: Json<Cryptogram>,
     client_config: Data<HttpClientConfig>,
-    cache_state: Data<Mutex<MemoizationCache>>,
-    services: Data<Services>,
 ) -> Result<HttpResponse, EvaluateError> {
     let live_client = LiveJsonClient::build(client_config.get_ref());
 
-    let (result, _) = do_evaluate(
-        ctx.get_ref(),
-        cache_state.into_inner(),
-        cryptogram.into_inner(),
-        live_client,
-        services.get_ref(),
-        make_state(),
-    )
-    .await?;
+    let result = do_evaluate(cryptogram.into_inner(), live_client).await?;
     Ok(HttpResponse::Ok().json(&result))
 }
 
@@ -115,11 +81,9 @@ async fn evaluate(
 pub trait JsonClient {
     async fn issue_request(
         &self,
-        method: Method,
-        uri: Uri,
-        value: &Value,
-        headers: Vec<(String, String)>,
-    ) -> Result<Value, EvaluateError>;
+        authority: Authority,
+        cryptogram: &Cryptogram,
+    ) -> Result<Cryptogram, EvaluateError>;
 }
 
 pub struct LiveJsonClient {
@@ -145,19 +109,21 @@ impl LiveJsonClient {
 impl JsonClient for LiveJsonClient {
     async fn issue_request(
         &self,
-        method: Method,
-        uri: Uri,
-        payload: &Value,
-        headers: Vec<(String, String)>,
-    ) -> Result<Value, EvaluateError> {
-        let mut req = self
+        authority: Authority,
+        payload: &Cryptogram,
+    ) -> Result<Cryptogram, EvaluateError> {
+        let req = self
             .client
-            .request(method, uri)
+            .request(
+                Method::POST,
+                Uri::builder()
+                    .authority(authority)
+                    .path_and_query("/evaluate")
+                    .build()
+                    .map_err(EvaluateError::UriBuilderError)?,
+            )
             .insert_header(("User-Agent", self.client_config.user_agent.clone()))
             .insert_header(("Content-Type", "application/json"));
-        for pair in headers.iter() {
-            req = req.insert_header(pair.clone());
-        }
         let mut result = req
             .send_json(payload)
             .await
@@ -177,7 +143,7 @@ impl JsonClient for LiveJsonClient {
             return Err(EvaluateError::NetworkError(context));
         }
         result
-            .json::<Value>()
+            .json::<Cryptogram>()
             .await
             .map_err(EvaluateError::InvalidJsonError)
     }
@@ -189,281 +155,34 @@ struct TestJsonClient;
 impl JsonClient for TestJsonClient {
     async fn issue_request(
         &self,
-        _method: Method,
-        _uri: Uri,
-        payload: &Value,
-        _headers: Vec<(String, String)>,
-    ) -> Result<Value, EvaluateError> {
+        _authority: Authority,
+        payload: &Cryptogram,
+    ) -> Result<Cryptogram, EvaluateError> {
         Ok(payload.clone())
     }
 }
 
 pub async fn do_evaluate<JC: JsonClient>(
-    ctx: &TranslateContext,
-    memoization_cache: Arc<Mutex<MemoizationCache>>,
     mut cryptogram: Cryptogram,
     json_client: JC,
-    services: &Services,
-    translator_state: State,
-) -> Result<(Value, Cryptogram), EvaluateError> {
-    let mut final_result: Option<Value> = None;
-
-    let mut step: usize = 0;
-    while step < cryptogram.steps.len() {
-        let current_step = &cryptogram.steps[step];
+) -> Result<Cryptogram, EvaluateError> {
+    while cryptogram.current < cryptogram.steps.len() {
+        let current_step = &cryptogram.steps[cryptogram.current];
         let service_name = &current_step.service;
-        let method_name = &current_step.method;
-        let payload = &current_step.payload.clone().unwrap_or(Value::Null);
-        let preflight = &current_step.preflight;
-        let postflight = &current_step.postflight;
-        let memoization_prefix = &current_step.memoization_prefix;
-        let headers = &current_step.headers;
 
-        let outgoing_payload = if let Some(pf) = preflight {
-            json_adapter::language::step(ctx, pf, payload, translator_state.clone())
-                .map_err(EvaluateError::InvalidStructure)?
-        } else {
-            payload.clone()
-        };
+        let service_metadata = crate::registry::lookup(&cryptogram).await;
+        let service = service_metadata
+            .images
+            .get(service_name)
+            .ok_or(EvaluateError::UnknownService(service_name.to_string()))?;
 
-        let memo_key = memoization_prefix
-            .clone()
-            .map(|prefix| format!("{}{}", prefix, hash_value(&outgoing_payload)));
+        let authority = crate::provisioner::lookup(service.spec.clone()).await;
 
-        let maybe_cache = if let Some(key) = memo_key.as_ref() {
-            memoization_cache.lock().await.get(key).cloned()
-        } else {
-            None
-        };
-        let new_payload = if let Some(cached_value) = maybe_cache {
-            cached_value
-        } else if let (Some(service_name), Some(method_name)) = (service_name, method_name) {
-            let service = services
-                .get(service_name)
-                .ok_or_else(|| EvaluateError::UnknownService(service_name.to_owned()))?
-                .to_owned();
-            let new_payload = match service {
-                ServiceDefinition::Rest {
-                    scheme,
-                    authority,
-                    methods,
-                    ..
-                } => {
-                    let method = methods.get(method_name).ok_or_else(|| {
-                        EvaluateError::UnknownMethod(
-                            service_name.to_owned(),
-                            method_name.to_owned(),
-                        )
-                    })?;
-
-                    let uri = Uri::builder()
-                        .scheme(scheme)
-                        .authority(authority)
-                        .path_and_query(method.path.to_owned())
-                        .build()
-                        .map_err(EvaluateError::UriBuilderError)?;
-
-                    let result = json_client
-                        .issue_request(
-                            method.method.clone(),
-                            uri,
-                            &outgoing_payload,
-                            headers.clone().unwrap_or_default(),
-                        )
-                        .await?;
-
-                    if let Some(pf) = postflight {
-                        json_adapter::language::step(ctx, pf, &result, translator_state.clone())
-                            .map_err(EvaluateError::InvalidStructure)?
-                    } else {
-                        result
-                    }
-                }
-            };
-            if let Some(key) = memo_key {
-                memoization_cache
-                    .lock()
-                    .await
-                    .insert(key, new_payload, Duration::from_secs(600))
-            } else {
-                new_payload
-            }
-        } else if let Some(pf) = postflight {
-            json_adapter::language::step(ctx, pf, &outgoing_payload, translator_state.clone())
-                .map_err(EvaluateError::InvalidStructure)?
-        } else {
-            outgoing_payload
-        };
-
-        let next_idx = step + 1;
-        if next_idx < cryptogram.steps.len() {
-            if cryptogram.steps[next_idx].payload.is_some() {
-                println!(
-                    "Warning: Discarding payload for step {}: {:?}",
-                    next_idx, cryptogram.steps[next_idx].payload
-                );
-            }
-            cryptogram.steps[next_idx].payload = Some(new_payload);
-        } else {
-            final_result = Some(new_payload);
-        }
-
-        step = next_idx;
+        cryptogram = json_client.issue_request(authority, &cryptogram).await?
     }
-
-    final_result
-        .map(|v| (v, cryptogram))
-        .ok_or(EvaluateError::NoStepsSpecified)
+    Ok(cryptogram)
 }
 
-#[actix_web::test]
-async fn routes_evaluate() {
-    use crate::config::MethodDefinition;
-    use crate::model::cryptogram::CryptogramStep;
-    use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
-    use hashbrown::hash_map::DefaultHashBuilder;
-    use hashbrown::HashMap;
-    use json_adapter::language::Language;
-    use serde_json::json;
-
-    let cryptogram = Cryptogram {
-        steps: vec![
-            CryptogramStep::build("catalog", "search")
-                .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
-
-                .finish()
-            ,
-            CryptogramStep::build("catalog", "lookup")
-                .payload(json!(null))
-                .postflight(Language::Object(vec![(
-                    String::from("results"),
-                    Language::at("results"),
-                )]))
-                .finish(),
-        ],
-    };
-
-    let mut services: Services = {
-        let s = DefaultHashBuilder::default();
-        HashMap::with_hasher(s)
-    };
-
-    services.insert(
-        "catalog".to_string(),
-        ServiceDefinition::Rest {
-            scheme: Scheme::HTTP,
-            authority: Authority::from_static("0:0"),
-            methods: {
-                let mut methods = {
-                    let s = DefaultHashBuilder::default();
-                    HashMap::with_hasher(s)
-                };
-                methods.insert(
-                    "search".to_string(),
-                    MethodDefinition {
-                        method: Method::POST,
-                        path: PathAndQuery::from_static("/search/"),
-                    },
-                );
-                methods.insert(
-                    "lookup".to_string(),
-                    MethodDefinition {
-                        method: Method::POST,
-                        path: PathAndQuery::from_static("/product_variants/"),
-                    },
-                );
-                methods
-            },
-            virtualhosts: None,
-        },
-    );
-
-    let ctx = TranslateContext::noop();
-    let memoization_cache = Arc::new(MemoizationCache::new());
-    match do_evaluate(
-        &ctx,
-        memoization_cache,
-        cryptogram,
-        TestJsonClient,
-        &services,
-        make_state(),
-    )
-    .await
-    {
-        Ok((value, _)) => assert_eq!(
-            value,
-            json!({ "results": { "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]} })
-        ),
-        other => {
-            let _ = other.unwrap();
-        }
-    }
-}
-
-async fn bound_function(
-    ctx: Data<TranslateContext>,
-    input: Json<Value>,
-    client_config: Data<HttpClientConfig>,
-    cache_state: Data<Mutex<MemoizationCache>>,
-    services: Data<Services>,
-    edge_route: EdgeRoute,
-) -> Result<HttpResponse, EvaluateError> {
-    let live_client = LiveJsonClient::build(client_config.get_ref());
-    let translator_state = make_state();
-
-    let input = input.into_inner();
-    let mut cryptogram = edge_route.cryptogram;
-    if !cryptogram.steps.is_empty() && cryptogram.steps[0].preflight.is_some() {
-        let input = json_adapter::language::step(
-            ctx.get_ref(),
-            &cryptogram.steps[0].preflight.clone().unwrap(),
-            &input,
-            translator_state.clone(),
-        )
-        .map_err(EvaluateError::InvalidStructure)?;
-        cryptogram.steps[0].payload = Some(input);
-        cryptogram.steps[0].preflight = None;
-    };
-    let (result, _) = do_evaluate(
-        ctx.get_ref(),
-        cache_state.into_inner(),
-        cryptogram,
-        live_client,
-        services.get_ref(),
-        translator_state,
-    )
-    .await?;
-    Ok(HttpResponse::Ok().json(&result))
-}
-
-pub fn configure(server: &mut web::ServiceConfig, virtualhosts: &Virtualhosts) {
-    let mut server = server;
-
-    for (_name, vhost) in virtualhosts {
-        let host_route = || web::route().guard(guard::Host(vhost.hostname.clone()));
-        for (route, edge_route) in &vhost.routes {
-            let edge_route = edge_route.clone();
-            server = server.route(
-                route,
-                host_route().guard(guard::Post()).to(
-                    move |ctx: Data<TranslateContext>,
-                          input: Json<Value>,
-                          client_config: Data<HttpClientConfig>,
-                          cache_state: Data<Mutex<MemoizationCache>>,
-                          services: Data<Services>| {
-                        bound_function(
-                            ctx,
-                            input,
-                            client_config,
-                            cache_state,
-                            services,
-                            edge_route.clone(),
-                        )
-                    },
-                ),
-            );
-        }
-    }
-
+pub fn configure(server: &mut web::ServiceConfig) {
     server.route("/evaluate", web::post().to(evaluate));
 }

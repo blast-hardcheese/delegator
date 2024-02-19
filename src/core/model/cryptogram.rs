@@ -1,8 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Cryptogram {
+    pub current: usize,
     pub steps: Vec<CryptogramStep>,
 }
 
@@ -14,7 +15,7 @@ impl FromStr for Cryptogram {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CryptogramStep {
     pub service: String,
     pub method: String,
