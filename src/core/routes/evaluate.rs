@@ -20,7 +20,7 @@ use crate::{
 
 use json_adapter::language::{make_state, State, StepError, TranslateContext};
 
-use crate::model::cryptogram::JsonCryptogram;
+use crate::model::cryptogram::Cryptogram;
 use crate::routes::errors::{json_error_response, JsonResponseError};
 
 impl fmt::Display for EvaluateError {
@@ -92,7 +92,7 @@ impl ResponseError for EvaluateError {
 
 async fn evaluate(
     ctx: Data<TranslateContext>,
-    cryptogram: Json<JsonCryptogram>,
+    cryptogram: Json<Cryptogram>,
     client_config: Data<HttpClientConfig>,
     cache_state: Data<Mutex<MemoizationCache>>,
     services: Data<Services>,
@@ -201,11 +201,11 @@ impl JsonClient for TestJsonClient {
 pub async fn do_evaluate<JC: JsonClient>(
     ctx: &TranslateContext,
     memoization_cache: Arc<Mutex<MemoizationCache>>,
-    mut cryptogram: JsonCryptogram,
+    mut cryptogram: Cryptogram,
     json_client: JC,
     services: &Services,
     translator_state: State,
-) -> Result<(Value, JsonCryptogram), EvaluateError> {
+) -> Result<(Value, Cryptogram), EvaluateError> {
     let mut final_result: Option<Value> = None;
 
     let mut step: usize = 0;
@@ -319,35 +319,21 @@ pub async fn do_evaluate<JC: JsonClient>(
 #[actix_web::test]
 async fn routes_evaluate() {
     use crate::config::MethodDefinition;
-    use crate::model::cryptogram::JsonCryptogramStep;
+    use crate::model::cryptogram::CryptogramStep;
     use actix_web::http::uri::{Authority, PathAndQuery, Scheme};
     use hashbrown::hash_map::DefaultHashBuilder;
     use hashbrown::HashMap;
     use json_adapter::language::Language;
     use serde_json::json;
 
-    let cryptogram = JsonCryptogram {
+    let cryptogram = Cryptogram {
         steps: vec![
-            JsonCryptogramStep::build("catalog", "search")
+            CryptogramStep::build("catalog", "search")
                 .payload(json!({ "q": "Foo", "results": [{"product_variant_id": "12313bb7-6068-4ec9-ac49-3e834181f127"}] }))
-                .postflight(Language::at("results").and_then(Language::Object(vec![
-                        (
-                            String::from("ids"),
-                            Language::map(Language::at(
-                                "product_variant_id",
-                            )),
-                        ),
-                        (
-                            String::from("results"),
-                            Language::Const(
-                                json!({ "product_variants": [{ "id": "12313bb7-6068-4ec9-ac49-3e834181f127" }]}),
-                            ),
-                        ),
-                    ])),
-                )
+
                 .finish()
             ,
-            JsonCryptogramStep::build("catalog", "lookup")
+            CryptogramStep::build("catalog", "lookup")
                 .payload(json!(null))
                 .postflight(Language::Object(vec![(
                     String::from("results"),
