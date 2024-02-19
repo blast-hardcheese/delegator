@@ -1,4 +1,3 @@
-pub mod events;
 pub mod http_method;
 pub mod path_and_query;
 pub mod scheme;
@@ -16,7 +15,6 @@ use serde::{Deserialize, Deserializer};
 
 use toml;
 
-use self::events::EventConfig;
 use crate::model::cryptogram::JsonCryptogram;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -94,7 +92,6 @@ pub type Virtualhosts = HashMap<String, Virtualhost>;
 pub struct Configuration {
     pub http: HttpConfig,
     pub services: Services,
-    pub events: EventConfig,
     pub virtualhosts: Virtualhosts,
 }
 

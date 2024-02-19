@@ -29,7 +29,6 @@ async fn main() -> Result<()> {
         .nth(1)
         .ok_or(InitErrors::MissingConfigFile)?;
     let Configuration {
-        events,
         http,
         services,
         virtualhosts,
@@ -39,11 +38,6 @@ async fn main() -> Result<()> {
     // I suspect it's so we get error traces in Sentry. We may need to revisit this.
     std::env::set_var("RUST_BACKTRACE", "1");
     println!("Preparing to bind to {}:{}", http.host, http.port);
-
-    // let event_client = {
-    //     let client = EventClient::new().await;
-    //     Arc::new(client)
-    // };
 
     let ctx = TranslateContext::build(());
 
@@ -67,7 +61,6 @@ async fn main() -> Result<()> {
         App::new()
             .wrap(Logger::default().log_target("accesslog"))
             .wrap(cors)
-            .app_data(Data::new(events.clone()))
             .app_data(Data::new(http.client.clone()))
             .app_data(Data::new(services.clone()))
             .app_data(Data::new(ctx.clone()))
