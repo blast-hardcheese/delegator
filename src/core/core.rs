@@ -1,5 +1,5 @@
-pub mod cache;
 pub mod config;
-pub mod events;
 pub mod model;
+pub mod provisioner;
+pub mod registry;
 pub mod routes;
