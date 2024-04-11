@@ -16,7 +16,7 @@ path = "src/core/core.rs"
 [dependencies]
 actix-cors = "0.7.0"
 actix-web = "4.5.1"
-async-trait = "0.1.78"
+async-trait = "0.1.79"
 awc = { version = "3.4.0", features = ["openssl"] }
 base64 = "0.21.2"
 derive_more = "0.99.17"
