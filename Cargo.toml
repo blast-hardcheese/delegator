@@ -37,3 +37,4 @@ uuid = { version = "1.3.4", features = ["v4", "serde"] }
 toml = "0.8.10"
 wson = { git = "https://github.com/blast-hardcheese/wson", branch = "expose-json-function" }
 json-adapter = { git = "https://github.com/blast-hardcheese/json-adapter", version = "0.1.0" }
+env_logger = "0.11.3"
