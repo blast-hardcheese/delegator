@@ -183,6 +183,7 @@ impl JsonClient for LiveJsonClient {
     }
 }
 
+#[allow(dead_code)]
 struct TestJsonClient;
 
 #[async_trait(?Send)]

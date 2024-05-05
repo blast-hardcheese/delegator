@@ -27,9 +27,6 @@ version-resolver:
     labels:
       - 'dependencies'
   default: patch
-replacers:
-  - search: '/[\[#]*ONE[- ](\d+)\]*\s*[\/:-]*\s*/ig'
-    replace: '[ONE-$1](https://appreciates.atlassian.net/browse/ONE-$1): '
 template: |
   ## Changes
 
