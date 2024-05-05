@@ -870,7 +870,7 @@ dependencies = [
 [[package]]
 name = "json-adapter"
 version = "0.1.0"
-source = "git+https://github.com/blast-hardcheese/json-adapter#53509659724233ddba5b861a1b3d65392b5f5f25"
+source = "git+https://github.com/blast-hardcheese/json-adapter#e80759842c1dfdc32d51178135bdfac1476b2ba4"
 dependencies = [
  "hashbrown",
  "log",
