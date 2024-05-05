@@ -16,7 +16,7 @@ Some high level features available via config file without extending the runtime
 
 ## Why
 
-The delegator is currently offered in one of two variants, both as a standalone edge layer, as well as an in-progress realization of a broader ecosystem.
+The delegator is currently offered in one of two variants, both as a [standalone edge layer](https://github.com/blast-hardcheese/delegator/tree/master), as well as an in-progress realization of a [broader ecosystem](https://github.com/blast-hardcheese/delegator/tree/develop).
 
 ## How
 
@@ -96,6 +96,7 @@ Preparing to bind to 0.0.0.0:8080
 
 ```bash
 $ curl localhost:8080/hello --json '{}'
+"Hello, World!"
 ```
 
 ... you'll see (in the access logs,) /world accessed by `delegator/0.1.0`, as well as /hello accessed by cURL:
